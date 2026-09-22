@@ -45,6 +45,8 @@ export const pranaApi = {
   listReferrals: () => request("/referrals"),
   updateReferral: (referralId, data) => request("/referrals/" + encodeURIComponent(referralId), { method: "PATCH", body: JSON.stringify(data) }),
   screeningHistory: (patientId) => request("/screenings/history/" + encodeURIComponent(patientId)),
+  listUsers: () => request("/users"),
+  updateUserRole: (userId, role) => request("/users/" + encodeURIComponent(userId) + "?role=" + encodeURIComponent(role), { method: "PATCH" }),
   verifyReport: (reportId, data) => request("/ocr/reports/" + encodeURIComponent(reportId) + "/verify", { method: "PATCH", body: JSON.stringify(data) }),
   extractReport: (patientId, file) => {
     const form = new FormData();
