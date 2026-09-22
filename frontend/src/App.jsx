@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { supabase, supabaseConfigured } from "./lib/supabase";
 import { pranaApi } from "./services/pranaApi";
 import { getQueuedHealthDataCount, syncQueuedHealthData, getQueuedMedicalReportCount, syncQueuedMedicalReports } from "./services/offlineQueue";
