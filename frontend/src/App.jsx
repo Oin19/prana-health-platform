@@ -181,7 +181,10 @@ function PatientForm({ onClose, onSave }) {
 function Screening({ setActive }) {
   const [patient, setPatient] = useState("");
   const [report, setReport] = useState(null);
+  const [ocrResult, setOcrResult] = useState(null);
   const [verified, setVerified] = useState(false);
+  const [ocrLoading, setOcrLoading] = useState(false);
+  const [ocrError, setOcrError] = useState("");
   const [data, setData] = useState({systolic:"",diastolic:"",glucose:"",haemoglobin:"",bmi:"",symptoms:""});
   const set = (k,v) => setData({...data,[k]:v});
   const [results, setResults] = useState(null);
@@ -226,8 +229,22 @@ function Screening({ setActive }) {
         </div>
       </Panel>
       <Panel title="Medical report processing">
-        <label className="upload-box"><input type="file" accept="image/*,.pdf" onChange={e=>setReport(e.target.files?.[0] || null)}/><strong>{report ? report.name : "Upload or capture a medical report"}</strong><span>OCR extraction is performed by the backend service.</span></label>
-        {report && <div className="ocr-state"><strong>Report selected</strong><p>Send this report to OCR, then verify or correct extracted values before screening.</p><button className="secondary-btn" onClick={()=>setVerified(true)}>Mark extracted values as verified</button>{verified&&<span className="verified">Verified for screening</span>}</div>}
+        <label className="upload-box"><input type="file" accept="image/*,.pdf" onChange={e=>{setReport(e.target.files?.[0] || null);setOcrResult(null);setVerified(false);setOcrError("");}}/><strong>{report ? report.name : "Upload or capture a medical report"}</strong><span>OCR extraction is performed by the backend service.</span></label>
+        {report && <div className="ocr-state">
+          <strong>Report selected</strong>
+          <p>Process the report with the configured OCR service, then verify or correct every extracted value before screening.</p>
+          <button className="secondary-btn" disabled={ocrLoading} onClick={async()=>{
+            if(!patient.trim()){setOcrError("Identify the patient before processing a report.");return;}
+            setOcrLoading(true);setOcrError("");
+            try{const result=await pranaApi.extractReport(patient,report);setOcrResult(result);}
+            catch(e){setOcrError(e.message);}
+            finally{setOcrLoading(false);}
+          }}>{ocrLoading ? "Processing..." : "Process report with OCR"}</button>
+          {ocrError&&<div className="error-box">{ocrError}</div>}
+          {ocrResult&&<div className="ocr-result"><strong>{ocrResult.status === "not_configured" ? "OCR service not connected" : "OCR extraction complete"}</strong><p>{ocrResult.reason || "Review the extracted values before continuing."}</p>{ocrResult.extracted_data&&<pre>{JSON.stringify(ocrResult.extracted_data,null,2)}</pre>}</div>}
+          <button className="secondary-btn" disabled={!ocrResult?.extracted_data} onClick={()=>setVerified(true)}>Mark extracted values as verified</button>
+          {verified&&<span className="verified">Verified for screening</span>}
+        </div>}
       </Panel>
     </section>
     <section className="panel">
