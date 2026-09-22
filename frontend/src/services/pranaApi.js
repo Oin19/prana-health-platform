@@ -33,6 +33,7 @@ export const pranaApi = {
   createReferral: (data) =>
     request("/referrals", { method: "POST", body: JSON.stringify(data) }),
   listReferrals: () => request("/referrals"),
+  screeningHistory: (patientId) => request("/screenings/history/" + encodeURIComponent(patientId)),
   extractReport: (patientId, file) => {
     const form = new FormData();
     form.append("patient_id", patientId);
