@@ -1,5 +1,5 @@
 import { supabase, supabaseConfigured } from "../lib/supabase";
-import { enqueueHealthData } from "./offlineQueue";
+import { enqueueHealthData, enqueueMedicalReport } from "./offlineQueue";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api";
 
@@ -50,10 +50,18 @@ export const pranaApi = {
   verifyReport: (reportId, data) => request("/ocr/reports/" + encodeURIComponent(reportId) + "/verify", { method: "PATCH", body: JSON.stringify(data) }),
   applyVerifiedReport: (reportId) => request("/ocr/reports/" + encodeURIComponent(reportId) + "/apply-to-health-data", { method: "POST" }),
   medicalReports: (patientId) => request("/ocr/reports/" + encodeURIComponent(patientId)),
-  extractReport: (patientId, file) => {
+  extractReport: async (patientId, file) => {
     const form = new FormData();
     form.append("patient_id", patientId);
     form.append("file", file);
-    return request("/ocr/extract", { method: "POST", body: form });
+    try {
+      return await request("/ocr/extract", { method: "POST", body: form });
+    } catch (error) {
+      if (!navigator.onLine) {
+        await enqueueMedicalReport(patientId, file);
+        return { status: "queued_offline", queued: true, patient_id: patientId, filename: file.name, reason: "Medical report saved locally and queued for upload when connectivity returns." };
+      }
+      throw error;
+    }
   },
 };
