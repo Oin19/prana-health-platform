@@ -42,7 +42,7 @@ def assess_screening(payload: HealthData):
     results = {}
     for disease, is_available in available.items():
         results[disease] = (
-            {"status": "ready", "risk": None, "explanation": None}
+            {"status": "not_configured", "risk": None, "explanation": None, "reason": "Validated disease-assessment service is not connected"}
             if is_available
             else {"status": "skipped", "reason": "Required data is missing"}
         )
