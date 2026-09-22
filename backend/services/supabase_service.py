@@ -9,16 +9,19 @@ class SupabaseService:
 
     def __init__(self, access_token: str):
         self.url = os.getenv("SUPABASE_URL", "").rstrip("/")
-        self.anon_key = os.getenv("SUPABASE_ANON_KEY", "")
+        self.publishable_key = (
+            os.getenv("SUPABASE_PUBLISHABLE_KEY")
+            or os.getenv("SUPABASE_ANON_KEY", "")
+        )
         self.access_token = access_token
 
     @property
     def configured(self) -> bool:
-        return bool(self.url and self.anon_key and self.access_token)
+        return bool(self.url and self.publishable_key and self.access_token)
 
     def _headers(self) -> dict[str, str]:
         return {
-            "apikey": self.anon_key,
+            "apikey": self.publishable_key,
             "Authorization": f"Bearer {self.access_token}",
             "Content-Type": "application/json",
         }
@@ -78,4 +81,10 @@ class SupabaseService:
 
 
 def supabase_enabled() -> bool:
-    return bool(os.getenv("SUPABASE_URL") and os.getenv("SUPABASE_ANON_KEY"))
+    return bool(
+        os.getenv("SUPABASE_URL")
+        and (
+            os.getenv("SUPABASE_PUBLISHABLE_KEY")
+            or os.getenv("SUPABASE_ANON_KEY")
+        )
+    )
