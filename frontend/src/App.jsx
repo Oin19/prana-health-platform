@@ -498,8 +498,31 @@ export default function App() {
 
   useEffect(() => {
     if (!supabaseConfigured) return;
-    supabase.auth.getSession().then(({ data }) => setSessionUser(data.session?.user || null));
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => setSessionUser(session?.user || null));
+    const restoreSession = async () => {
+      const { data } = await supabase.auth.getSession();
+      const user = data.session?.user || null;
+      setSessionUser(user);
+      if (!user) return;
+      try {
+        const { data: profile, error } = await supabase
+          .from("user_profiles")
+          .select("full_name,role")
+          .eq("id", user.id)
+          .single();
+        if (error) throw error;
+        const roleMap = { asha_anm:"ASHA / ANM Worker", phc_staff:"PHC Staff", phc_doctor:"PHC Doctor", admin:"Admin" };
+        setRole(roleMap[profile.role] || null);
+        setDevelopmentMode(false);
+      } catch {
+        await supabase.auth.signOut();
+        setSessionUser(null);
+      }
+    };
+    restoreSession();
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSessionUser(session?.user || null);
+      if (!session) setRole(null);
+    });
     return () => listener.subscription.unsubscribe();
   }, []);
 
