@@ -1,8 +1,8 @@
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 from api.auth import RequestUser, get_request_user
 from services.supabase_service import SupabaseService
@@ -20,8 +20,16 @@ class HealthData(BaseModel):
     haemoglobin: Optional[float] = None
     bmi: Optional[float] = None
     symptoms: Optional[str] = None
-    source: str = "manual"
+    source: Literal["manual", "ocr_verified"] = "manual"
     source_report_id: Optional[str] = None
+
+    @model_validator(mode="after")
+    def validate_source_relationship(self):
+        if self.source == "ocr_verified" and not self.source_report_id:
+            raise ValueError("OCR-verified health data must reference its medical report.")
+        if self.source == "manual" and self.source_report_id:
+            raise ValueError("Manual health data cannot reference an OCR report.")
+        return self
 
 
 def _assessment_results(payload: HealthData) -> dict:
