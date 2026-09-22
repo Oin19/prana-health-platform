@@ -81,8 +81,16 @@ function WorkerDashboard({ setActive }) {
   const [queued, setQueued] = useState(0);
   const [online, setOnline] = useState(navigator.onLine);
   useEffect(() => {
-    const refresh = async () => setQueued(await getQueuedHealthDataCount().catch(() => 0));
-    const sync = async () => { await syncQueuedHealthData(pranaApi.saveHealthData).catch(() => 0); await refresh(); };
+    const refresh = async () => {
+      const health = await getQueuedHealthDataCount().catch(() => 0);
+      const reports = await getQueuedMedicalReportCount().catch(() => 0);
+      setQueued(health + reports);
+    };
+    const sync = async () => {
+      await syncQueuedHealthData(pranaApi.saveHealthData).catch(() => 0);
+      await syncQueuedMedicalReports(pranaApi.extractReport).catch(() => 0);
+      await refresh();
+    };
     const onOnline = () => { setOnline(true); sync(); };
     const onOffline = () => setOnline(false);
     refresh();
@@ -204,7 +212,6 @@ function Screening({ setActive }) {
   const [appliedHealthDataId, setAppliedHealthDataId] = useState("");
   const [ocrLoading, setOcrLoading] = useState(false);
   const [ocrError, setOcrError] = useState("");
-  const [queuedReports, setQueuedReports] = useState(0);
   const [data, setData] = useState({systolic:"",diastolic:"",glucose:"",haemoglobin:"",bmi:"",symptoms:""});
   const set = (k,v) => setData({...data,[k]:v});
   const [results, setResults] = useState(null);
