@@ -2,6 +2,7 @@ import os
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from pydantic import BaseModel, ConfigDict, Field
 
 from api.auth import RequestUser, get_request_user
 from services.supabase_service import SupabaseService
@@ -9,6 +10,23 @@ from services.supabase_service import SupabaseService
 router = APIRouter(prefix="/ocr", tags=["ocr"])
 
 _ALLOWED_TYPES = {"application/pdf", "image/jpeg", "image/png", "image/webp"}
+_MAX_REPORT_BYTES = 10 * 1024 * 1024
+
+
+class VerifiedReportData(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    systolic_bp: float | None = Field(default=None, allow_inf_nan=False)
+    diastolic_bp: float | None = Field(default=None, allow_inf_nan=False)
+    blood_glucose: float | None = Field(default=None, allow_inf_nan=False)
+    haemoglobin: float | None = Field(default=None, allow_inf_nan=False)
+    bmi: float | None = Field(default=None, allow_inf_nan=False)
+    symptoms: str | None = None
+
+    def supported_values(self) -> dict:
+        return self.model_dump(exclude_none=True)
+
+
 
 
 
@@ -43,7 +61,7 @@ def list_reports(
 @router.patch("/reports/{report_id}/verify")
 async def verify_report(
     report_id: str,
-    verified_data: dict,
+    verified_data: VerifiedReportData,
     user: RequestUser = Depends(get_request_user),
 ):
     if user.development_mode:
@@ -52,8 +70,8 @@ async def verify_report(
             detail="Medical-report verification requires Supabase-backed authentication.",
         )
 
-    if not verified_data:
-        raise HTTPException(status_code=400, detail="Verified report data is required.")
+    if not verified_data.supported_values():
+        raise HTTPException(status_code=400, detail="At least one supported verified health value is required.")
 
     try:
         service = SupabaseService(user.access_token)
@@ -73,7 +91,7 @@ async def verify_report(
             "medical_reports",
             f"id=eq.{report_id}",
             {
-                "verified_data": verified_data,
+                "verified_data": verified_data.supported_values(),
                 "verified_by": user.id,
                 "ocr_status": "extracted",
             },
@@ -126,7 +144,11 @@ def apply_verified_report_to_health_data(
             "bmi",
             "symptoms",
         )
-        health_values = {field: verified[field] for field in allowed_fields if field in verified}
+        try:
+            validated = VerifiedReportData.model_validate(verified)
+        except Exception as exc:
+            raise HTTPException(status_code=422, detail="Stored verified report data is invalid.") from exc
+        health_values = validated.supported_values()
         if not health_values:
             raise HTTPException(
                 status_code=422,
@@ -180,6 +202,8 @@ async def extract_report(
     content = await file.read()
     if not content:
         raise HTTPException(status_code=400, detail="The medical report file is empty.")
+    if len(content) > _MAX_REPORT_BYTES:
+        raise HTTPException(status_code=413, detail="Medical report files must be 10 MB or smaller.")
 
     if user.development_mode:
         return {
