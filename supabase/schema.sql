@@ -1,4 +1,4 @@
--- PRANA database schema
+-- PRANA Supabase schema (PostgreSQL)
 -- D1: Patient Database
 -- D2: Health Data Store
 -- D3: Screening Records
