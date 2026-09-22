@@ -133,6 +133,17 @@ def apply_verified_report_to_health_data(
                 detail="The verified report contains no supported PRANA health-data fields.",
             )
 
+        existing = service.select(
+            "health_data",
+            f"select=*&source_report_id=eq.{report_id}&limit=1",
+        )
+        if existing:
+            return {
+                "status": "already_applied",
+                "report_id": report_id,
+                "health_data": existing[0],
+            }
+
         row = service.insert(
             "health_data",
             {
