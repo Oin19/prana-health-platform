@@ -11,6 +11,46 @@ router = APIRouter(prefix="/ocr", tags=["ocr"])
 _ALLOWED_TYPES = {"application/pdf", "image/jpeg", "image/png", "image/webp"}
 
 
+
+@router.patch("/reports/{report_id}/verify")
+async def verify_report(
+    report_id: str,
+    verified_data: dict,
+    user: RequestUser = Depends(get_request_user),
+):
+    if user.development_mode:
+        raise HTTPException(
+            status_code=503,
+            detail="Medical-report verification requires Supabase-backed authentication.",
+        )
+
+    if not verified_data:
+        raise HTTPException(status_code=400, detail="Verified report data is required.")
+
+    try:
+        service = SupabaseService(user.access_token)
+        rows = service.update(
+            "medical_reports",
+            f"id=eq.{report_id}",
+            {
+                "verified_data": verified_data,
+                "verified_by": user.id,
+                "ocr_status": "extracted",
+            },
+        )
+        if not rows:
+            raise HTTPException(status_code=404, detail="Medical report not found.")
+        return {
+            "status": "verified",
+            "report_id": report_id,
+            "verified_data": rows[0].get("verified_data"),
+        }
+    except HTTPException:
+        raise
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail="Medical-report verification could not be saved.") from exc
+
+
 @router.post("/extract")
 async def extract_report(
     patient_id: str = Form(...),
