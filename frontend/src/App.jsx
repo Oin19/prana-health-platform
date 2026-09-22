@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase, supabaseConfigured } from "./lib/supabase";
 import { pranaApi } from "./services/pranaApi";
-import { getQueuedHealthDataCount, syncQueuedHealthData } from "./services/offlineQueue";
+import { getQueuedHealthDataCount, syncQueuedHealthData, getQueuedMedicalReportCount, syncQueuedMedicalReports } from "./services/offlineQueue";
 
 const ROLES = ["ASHA / ANM Worker", "PHC Staff", "PHC Doctor", "Admin"];
 
@@ -204,6 +204,7 @@ function Screening({ setActive }) {
   const [appliedHealthDataId, setAppliedHealthDataId] = useState("");
   const [ocrLoading, setOcrLoading] = useState(false);
   const [ocrError, setOcrError] = useState("");
+  const [queuedReports, setQueuedReports] = useState(0);
   const [data, setData] = useState({systolic:"",diastolic:"",glucose:"",haemoglobin:"",bmi:"",symptoms:""});
   const set = (k,v) => setData({...data,[k]:v});
   const [results, setResults] = useState(null);
@@ -266,12 +267,12 @@ function Screening({ setActive }) {
           <button className="secondary-btn" disabled={ocrLoading} onClick={async()=>{
             if(!patient.trim()){setOcrError("Identify the patient before processing a report.");return;}
             setOcrLoading(true);setOcrError("");
-            try{const result=await pranaApi.extractReport(patient,report);setOcrResult(result);}
+            try{const result=await pranaApi.extractReport(patient,report);setOcrResult(result);if(result?.queued){setOcrError("");}}
             catch(e){setOcrError(e.message);}
             finally{setOcrLoading(false);}
           }}>{ocrLoading ? "Processing..." : "Process report with OCR"}</button>
           {ocrError&&<div className="error-box">{ocrError}</div>}
-          {ocrResult&&<div className="ocr-result"><strong>{ocrResult.demo ? "Demo OCR extraction complete" : ocrResult.status === "not_configured" ? "OCR service not connected" : "OCR extraction complete"}</strong><p>{ocrResult.reason || "Review the extracted values before continuing."}</p>{ocrResult.demo&&<div className="dev-banner"><strong>DEMO ONLY</strong><span>These values are simulated. They were not read from the uploaded medical report.</span></div>}{ocrResult.extracted_data&&<pre>{JSON.stringify(ocrResult.extracted_data,null,2)}</pre>}</div>}
+          {ocrResult&&<div className="ocr-result"><strong>{ocrResult.queued ? "Report queued for upload" : ocrResult.demo ? "Demo OCR extraction complete" : ocrResult.status === "not_configured" ? "OCR service not connected" : "OCR extraction complete"}</strong><p>{ocrResult.reason || "Review the extracted values before continuing."}</p>{ocrResult.demo&&<div className="dev-banner"><strong>DEMO ONLY</strong><span>These values are simulated. They were not read from the uploaded medical report.</span></div>}{ocrResult.extracted_data&&<pre>{JSON.stringify(ocrResult.extracted_data,null,2)}</pre>}</div>}
           <button className="secondary-btn" disabled={!ocrResult?.extracted_data} onClick={async()=>{try{if(ocrResult.demo){setVerified(true);setOcrError("");}else{await pranaApi.verifyReport(ocrResult.report_id, ocrResult.extracted_data);setVerified(true);}}catch(e){setOcrError(e.message);}}}>Verify extracted values</button>
           {verified&&<span className="verified">Verified for screening</span>}
           {verified&&ocrResult?.report_id&&<button className="secondary-btn" onClick={async()=>{
