@@ -9,6 +9,8 @@ from services.supabase_service import SupabaseService
 
 router = APIRouter(prefix="/ocr", tags=["ocr"])
 
+_MEDICAL_REPORTS: list[dict] = []
+
 _ALLOWED_TYPES = {"application/pdf", "image/jpeg", "image/png", "image/webp"}
 _MAX_REPORT_BYTES = 10 * 1024 * 1024
 
@@ -47,7 +49,10 @@ def list_reports(
     user: RequestUser = Depends(get_request_user),
 ):
     if user.development_mode:
-        return {"patient_id": patient_id, "reports": []}
+        return {
+            "patient_id": patient_id,
+            "reports": [row for row in reversed(_MEDICAL_REPORTS) if row["patient_id"] == patient_id],
+        }
 
     try:
         service = SupabaseService(user.access_token)
@@ -76,10 +81,17 @@ async def verify_report(
     user: RequestUser = Depends(get_request_user),
 ):
     if user.development_mode:
-        raise HTTPException(
-            status_code=503,
-            detail="Medical-report verification requires Supabase-backed authentication.",
-        )
+        if not verified_data.supported_values():
+            raise HTTPException(status_code=400, detail="At least one supported verified health value is required.")
+        report = next((r for r in _MEDICAL_REPORTS if r["id"] == report_id), None)
+        if not report:
+            raise HTTPException(status_code=404, detail="Medical report not found.")
+        if not report.get("extracted_data"):
+            raise HTTPException(status_code=409, detail="The report has no OCR-extracted data to verify yet.")
+        report["verified_data"] = verified_data.supported_values()
+        report["verified_by"] = "local-development-user"
+        report["ocr_status"] = "extracted"
+        return {"status": "verified", "report_id": report_id, "verified_data": report["verified_data"]}
 
     if not verified_data.supported_values():
         raise HTTPException(status_code=400, detail="At least one supported verified health value is required.")
@@ -126,10 +138,26 @@ def apply_verified_report_to_health_data(
     user: RequestUser = Depends(get_request_user),
 ):
     if user.development_mode:
-        raise HTTPException(
-            status_code=503,
-            detail="Applying verified report data requires Supabase-backed authentication.",
-        )
+        report = next((r for r in _MEDICAL_REPORTS if r["id"] == report_id), None)
+        if not report:
+            raise HTTPException(status_code=404, detail="Medical report not found.")
+        verified = report.get("verified_data") or {}
+        if not verified:
+            raise HTTPException(status_code=409, detail="Verify the extracted report values before applying them to health data.")
+        from api.screening import _HEALTH_DATA
+        existing = next((row for row in _HEALTH_DATA if row.get("source_report_id") == report_id), None)
+        if existing:
+            return {"status": "already_applied", "report_id": report_id, "health_data": existing}
+        row = {
+            "id": f"DEV-HD-OCR-{len(_HEALTH_DATA) + 1:04d}",
+            "patient_id": report["patient_id"],
+            **verified,
+            "source": "ocr_verified",
+            "source_report_id": report_id,
+            "recorded_at": report["created_at"],
+        }
+        _HEALTH_DATA.append(row)
+        return {"status": "applied", "report_id": report_id, "health_data": row}
 
     try:
         service = SupabaseService(user.access_token)
@@ -218,12 +246,26 @@ async def extract_report(
 
     demo_ocr = user.development_mode or os.getenv("PRANA_DEMO_OCR", "").strip().lower() == "true"
     if demo_ocr and user.development_mode:
+        report_id = "demo-" + uuid4().hex
+        now = __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat()
+        report = {
+            "id": report_id,
+            "patient_id": patient_id,
+            "storage_path": f"local-demo/{report_id}-{file.filename}",
+            "ocr_status": "extracted",
+            "extracted_data": _demo_ocr_values(),
+            "verified_data": None,
+            "verified_by": None,
+            "created_at": now,
+            "filename": file.filename,
+        }
+        _MEDICAL_REPORTS.append(report)
         return {
             "status": "demo_extracted",
             "patient_id": patient_id,
             "filename": file.filename,
-            "report_id": "demo-" + uuid4().hex,
-            "extracted_data": _demo_ocr_values(),
+            "report_id": report_id,
+            "extracted_data": report["extracted_data"],
             "reason": "DEMO OCR: these values are simulated for workflow testing and are not extracted from the uploaded report.",
             "verification_required": True,
             "demo": True,
