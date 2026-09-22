@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, Field, model_validator
 
 from api.auth import RequestUser, get_request_user
 from services.supabase_service import SupabaseService
@@ -17,11 +17,11 @@ _SCREENINGS: list[dict] = []
 class HealthData(BaseModel):
     patient_id: str
     health_data_id: Optional[str] = None
-    systolic_bp: Optional[float] = None
-    diastolic_bp: Optional[float] = None
-    blood_glucose: Optional[float] = None
-    haemoglobin: Optional[float] = None
-    bmi: Optional[float] = None
+    systolic_bp: Optional[float] = Field(default=None, allow_inf_nan=False)
+    diastolic_bp: Optional[float] = Field(default=None, allow_inf_nan=False)
+    blood_glucose: Optional[float] = Field(default=None, allow_inf_nan=False)
+    haemoglobin: Optional[float] = Field(default=None, allow_inf_nan=False)
+    bmi: Optional[float] = Field(default=None, allow_inf_nan=False)
     symptoms: Optional[str] = None
     source: Literal["manual", "ocr_verified"] = "manual"
     source_report_id: Optional[str] = None
