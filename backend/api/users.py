@@ -40,6 +40,9 @@ def update_user_role(
     if role not in ALLOWED_ROLES:
         raise HTTPException(status_code=400, detail="Invalid PRANA role.")
     service = require_admin(user)
+    if user_id == user.id and role != "admin":
+        raise HTTPException(status_code=400, detail="An admin cannot remove their own admin role.")
+
     profiles = service.update(
         "user_profiles",
         f"id=eq.{user_id}",
