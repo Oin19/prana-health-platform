@@ -112,7 +112,7 @@ function WorkerDashboard({ setActive }) {
       <ActionCard title="Referrals / Teleconsultation" text="Review referral requests and consultation status." onClick={() => setActive("referrals")}/>
     </div>
     <section className="notice connectivity-notice">
-      <strong>{online ? "Connection available" : "Offline mode"}</strong><span>{queued ? `${queued} health record${queued === 1 ? "" : "s"} queued for synchronization.` : "No health records are waiting for synchronization."}</span>
+      <strong>{online ? "Connection available" : "Offline mode"}</strong><span>{queued ? `${queued} item${queued === 1 ? "" : "s"} queued for synchronization.` : "No records are waiting for synchronization."}</span>
     </section>
     <section className="two-column">
       <Panel title="Disease assessments">
@@ -120,7 +120,7 @@ function WorkerDashboard({ setActive }) {
         <p className="muted">Results appear only when the required patient data is available.</p>
       </Panel>
       <Panel title="Connectivity">
-        <div className="offline-box"><strong>Offline-first health records</strong><p>Manual health-data entries made while offline are stored locally and automatically synchronized when connectivity returns.</p><span>{queued ? `${queued} record${queued === 1 ? "" : "s"} waiting` : "Queue is clear"}</span></div>
+        <div className="offline-box"><strong>Offline-first capture</strong><p>Health-data entries and medical reports captured while offline are stored locally and synchronized when connectivity returns.</p><span>{queued ? `${queued} queued item${queued === 1 ? "" : "s"} waiting` : "Queue is clear"}</span></div>
       </Panel>
     </section>
   </>;
@@ -151,7 +151,7 @@ function ActionCard({ title, text, onClick }) {
 
 function Panel({ title, children }) { return <section className="panel"><div className="panel-head"><h2>{title}</h2></div>{children}</section>; }
 
-function Patients({ setActive }) {
+function Patients({ setActive, selectedPatientId, onSelectPatient }) {
   const [patients, setPatients] = useState([]);
   const [query, setQuery] = useState("");
   const [showForm, setShowForm] = useState(false);
@@ -171,7 +171,7 @@ function Patients({ setActive }) {
       action={<button className="primary-btn" onClick={() => setShowForm(true)}>Register Patient</button>}/>
     <section className="panel">
       <div className="search-row"><input value={query} onChange={e => search(e.target.value)} placeholder="Search patient name, patient ID or other registered details"/><span>{filtered.length} record{filtered.length === 1 ? "" : "s"}</span></div>
-      {loading ? <Empty title="Loading patient records" text="Retrieving authorized patient records."/> : filtered.length ? <PatientRows patients={filtered} setActive={setActive}/> : <Empty title="No patient records found" text="Register a patient to create the first record or change the search term."/>}
+      {loading ? <Empty title="Loading patient records" text="Retrieving authorized patient records."/> : filtered.length ? <PatientRows patients={filtered} setActive={setActive} onSelectPatient={onSelectPatient}/> : <Empty title="No patient records found" text="Register a patient to create the first record or change the search term."/>}
       {error && <div className="error-box">{error}</div>}
     </section>
     {showForm && <PatientForm onClose={() => setShowForm(false)} onSave={async p => {
@@ -181,7 +181,7 @@ function Patients({ setActive }) {
   </>;
 }
 
-function PatientRows({ patients, setActive }) {
+function PatientRows({ patients, setActive, onSelectPatient }) {
   return <div className="table-wrap"><table><thead><tr><th>Patient ID</th><th>Name</th><th>Age</th><th>Gender</th><th>Contact</th><th></th></tr></thead><tbody>{patients.map(p =>
     <tr key={p.patient_id || p.id}><td>{p.patient_id || p.id}</td><td><strong>{p.name}</strong></td><td>{p.age || "—"}</td><td>{p.gender || "—"}</td><td>{p.contact || "—"}</td><td><button className="link-btn" onClick={() => setActive("history")}>View history</button></td></tr>
   )}</tbody></table></div>;
@@ -267,7 +267,7 @@ function Screening({ setActive }) {
         </div>
       </Panel>
       <Panel title="Medical report processing">
-        <label className="upload-box"><input type="file" accept="image/*,.pdf" onChange={e=>{setReport(e.target.files?.[0] || null);setOcrResult(null);setVerified(false);setAppliedReportId("");setOcrError("");}}/><strong>{report ? report.name : "Upload or capture a medical report"}</strong><span>OCR extraction is performed by the backend service.</span></label>
+        <label className="upload-box"><input type="file" accept="image/*,.pdf" onChange={e=>{setReport(e.target.files?.[0] || null);setOcrResult(null);setVerified(false);setAppliedReportId("");setAppliedHealthDataId("");setOcrError("");}}/><strong>{report ? report.name : "Upload or capture a medical report"}</strong><span>OCR extraction is performed by the backend service.</span></label>
         {report && <div className="ocr-state">
           <strong>Report selected</strong>
           <p>Process the report with the configured OCR service, then verify or correct every extracted value before screening.</p>
@@ -280,11 +280,11 @@ function Screening({ setActive }) {
           }}>{ocrLoading ? "Processing..." : "Process report with OCR"}</button>
           {ocrError&&<div className="error-box">{ocrError}</div>}
           {ocrResult&&<div className="ocr-result"><strong>{ocrResult.queued ? "Report queued for upload" : ocrResult.demo ? "Demo OCR extraction complete" : ocrResult.status === "not_configured" ? "OCR service not connected" : "OCR extraction complete"}</strong><p>{ocrResult.reason || "Review the extracted values before continuing."}</p>{ocrResult.demo&&<div className="dev-banner"><strong>DEMO ONLY</strong><span>These values are simulated. They were not read from the uploaded medical report.</span></div>}{ocrResult.extracted_data&&<pre>{JSON.stringify(ocrResult.extracted_data,null,2)}</pre>}</div>}
-          <button className="secondary-btn" disabled={!ocrResult?.extracted_data} onClick={async()=>{try{if(ocrResult.demo){setVerified(true);setOcrError("");}else{await pranaApi.verifyReport(ocrResult.report_id, ocrResult.extracted_data);setVerified(true);}}catch(e){setOcrError(e.message);}}}>Verify extracted values</button>
+          <button className="secondary-btn" disabled={!ocrResult?.extracted_data} onClick={async()=>{try{await pranaApi.verifyReport(ocrResult.report_id, ocrResult.extracted_data);setVerified(true);setOcrError("");}catch(e){setOcrError(e.message);}}}>Verify extracted values</button>
           {verified&&<span className="verified">Verified for screening</span>}
           {verified&&ocrResult?.report_id&&<button className="secondary-btn" onClick={async()=>{
             try{
-              const applied=ocrResult.demo ? {health_data:{...ocrResult.extracted_data,id:"demo-health-data"}} : await pranaApi.applyVerifiedReport(ocrResult.report_id);
+              const applied=await pranaApi.applyVerifiedReport(ocrResult.report_id);
               const h=applied.health_data || {};
               set("systolic", h.systolic_bp ?? "");
               set("diastolic", h.diastolic_bp ?? "");
@@ -292,7 +292,7 @@ function Screening({ setActive }) {
               set("haemoglobin", h.haemoglobin ?? "");
               set("bmi", h.bmi ?? "");
               set("symptoms", h.symptoms ?? "");
-              setAppliedReportId(ocrResult.demo ? "demo" : ocrResult.report_id);
+              setAppliedReportId(ocrResult.report_id);
               setAppliedHealthDataId(h.id || "");
               setOcrError("");
             }catch(e){setOcrError(e.message);}
@@ -315,12 +315,12 @@ function Screening({ setActive }) {
   </>;
 }
 
-function Referrals({ role }) {
+function Referrals({ role, selectedPatientId }) {
   const doctor = role === "PHC Doctor";
   const [referrals, setReferrals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [form, setForm] = useState({patient_id:"", reason:"", appointment_requested:false});
+  const [form, setForm] = useState({patient_id:selectedPatientId || "", reason:"", appointment_requested:false});
   const load = async () => {
     setLoading(true);
     try { const data = await pranaApi.listReferrals(); setReferrals(data.referrals || []); setError(""); }
@@ -495,18 +495,18 @@ export default function App() {
     return () => listener.subscription.unsubscribe();
   }, []);
 
-  if (!role) return <Login onLogin={({role,user,developmentMode}) => {setRole(role);setSessionUser(user);setDevelopmentMode(developmentMode);setActive("dashboard")}}/>;
+  if (!role) return <Login onLogin={({role,user,developmentMode}) => {setRole(role);setSessionUser(user);setDevelopmentMode(developmentMode);setSelectedPatientId("");setActive("dashboard")}}/>;
 
   const signOut = async () => {
     if (supabaseConfigured && !developmentMode) await supabase.auth.signOut();
-    setRole(null); setSessionUser(null);
+    setRole(null); setSessionUser(null); setSelectedPatientId("");
   };
 
   const content = active === "dashboard" ? <Dashboard role={role} setActive={setActive}/>
-    : active === "patients" ? <Patients setActive={setActive}/>
-    : active === "screening" ? <Screening setActive={setActive}/>
-    : active === "referrals" ? <Referrals role={role}/>
-    : active === "history" ? <History/>
+    : active === "patients" ? <Patients setActive={setActive} selectedPatientId={selectedPatientId} onSelectPatient={setSelectedPatientId}/>
+    : active === "screening" ? <Screening setActive={setActive} selectedPatientId={selectedPatientId}/>
+    : active === "referrals" ? <Referrals role={role} selectedPatientId={selectedPatientId}/>
+    : active === "history" ? <History selectedPatientId={selectedPatientId}/>
     : <Users/>;
 
   return <Layout role={role} active={active} setActive={setActive} onLogout={signOut}>
