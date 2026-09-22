@@ -271,12 +271,12 @@ function Screening({ setActive }) {
             finally{setOcrLoading(false);}
           }}>{ocrLoading ? "Processing..." : "Process report with OCR"}</button>
           {ocrError&&<div className="error-box">{ocrError}</div>}
-          {ocrResult&&<div className="ocr-result"><strong>{ocrResult.status === "not_configured" ? "OCR service not connected" : "OCR extraction complete"}</strong><p>{ocrResult.reason || "Review the extracted values before continuing."}</p>{ocrResult.extracted_data&&<pre>{JSON.stringify(ocrResult.extracted_data,null,2)}</pre>}</div>}
-          <button className="secondary-btn" disabled={!ocrResult?.extracted_data} onClick={async()=>{try{await pranaApi.verifyReport(ocrResult.report_id, ocrResult.extracted_data);setVerified(true);}catch(e){setOcrError(e.message);}}}>Verify extracted values</button>
+          {ocrResult&&<div className="ocr-result"><strong>{ocrResult.demo ? "Demo OCR extraction complete" : ocrResult.status === "not_configured" ? "OCR service not connected" : "OCR extraction complete"}</strong><p>{ocrResult.reason || "Review the extracted values before continuing."}</p>{ocrResult.demo&&<div className="dev-banner"><strong>DEMO ONLY</strong><span>These values are simulated. They were not read from the uploaded medical report.</span></div>}{ocrResult.extracted_data&&<pre>{JSON.stringify(ocrResult.extracted_data,null,2)}</pre>}</div>}
+          <button className="secondary-btn" disabled={!ocrResult?.extracted_data} onClick={async()=>{try{if(ocrResult.demo){setVerified(true);setOcrError("");}else{await pranaApi.verifyReport(ocrResult.report_id, ocrResult.extracted_data);setVerified(true);}}catch(e){setOcrError(e.message);}}}>Verify extracted values</button>
           {verified&&<span className="verified">Verified for screening</span>}
           {verified&&ocrResult?.report_id&&<button className="secondary-btn" onClick={async()=>{
             try{
-              const applied=await pranaApi.applyVerifiedReport(ocrResult.report_id);
+              const applied=ocrResult.demo ? {health_data:{...ocrResult.extracted_data,id:"demo-health-data"}} : await pranaApi.applyVerifiedReport(ocrResult.report_id);
               const h=applied.health_data || {};
               set("systolic", h.systolic_bp ?? "");
               set("diastolic", h.diastolic_bp ?? "");
@@ -284,7 +284,7 @@ function Screening({ setActive }) {
               set("haemoglobin", h.haemoglobin ?? "");
               set("bmi", h.bmi ?? "");
               set("symptoms", h.symptoms ?? "");
-              setAppliedReportId(ocrResult.report_id);
+              setAppliedReportId(ocrResult.demo ? "demo" : ocrResult.report_id);
               setAppliedHealthDataId(h.id || "");
               setOcrError("");
             }catch(e){setOcrError(e.message);}
