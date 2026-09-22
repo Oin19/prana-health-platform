@@ -273,7 +273,9 @@ function Screening({ setActive }) {
       {assessmentError && <div className="error-box">{assessmentError}</div>}
       {results ? <div className="assessment-grid">{diseaseFields.map(([name,key]) => {
         const result = results[key] || {status:"skipped",reason:"Assessment unavailable"};
-        return <div className="assessment-result" key={key}><strong>{name}</strong><RiskTag value={result.status === "ready" ? "Ready" : "Skipped"}/><p>{result.status === "skipped" ? result.reason : "The validated screening service will return the risk result and SHAP-based explanation here."}</p></div>;
+        const tag = result.status === "ready" ? "Ready" : result.status === "skipped" ? "Skipped" : "Not available";
+        const detail = result.status === "skipped" ? result.reason : result.explanation || result.reason || "The validated screening service will return the risk result and SHAP-based explanation here.";
+        return <div className="assessment-result" key={key}><strong>{name}</strong><RiskTag value={tag}/><p>{detail}</p>{result.missing_fields?.length > 0 && <small>Missing: {result.missing_fields.join(", ")}</small>}{result.contributing_factors?.length > 0 && <small>Contributing factors: {result.contributing_factors.map(x => x.feature || x.name || String(x)).join(", ")}</small>}</div>;
       })}</div> : <Empty title="No screening results yet" text="Provide sufficient verified data before starting the assessment."/>}
     </section>
     <div className="clinical-note">Screening results support early identification and referral. They are not a diagnosis. Clinical decisions remain with qualified healthcare professionals.</div>
