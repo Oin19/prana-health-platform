@@ -115,6 +115,17 @@ on public.user_profiles for select
 to authenticated
 using (id = auth.uid());
 
+create policy "admins can read all user profiles"
+on public.user_profiles for select
+to authenticated
+using (public.current_app_role() = 'admin');
+
+create policy "admins can update user profiles"
+on public.user_profiles for update
+to authenticated
+using (public.current_app_role() = 'admin')
+with check (public.current_app_role() = 'admin');
+
 create policy "authorized health users can access patients"
 on public.patients for all
 to authenticated
