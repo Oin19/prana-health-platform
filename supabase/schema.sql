@@ -6,13 +6,13 @@
 
 create extension if not exists pgcrypto;
 
-do $
+do $$
 begin
   create type public.app_role as enum ('asha_anm', 'phc_staff', 'phc_doctor', 'admin');
 exception when duplicate_object then null;
 end $;
 
-do $
+do $$
 begin
   create type public.referral_status as enum ('pending', 'reviewed', 'completed');
 exception when duplicate_object then null;
@@ -149,7 +149,7 @@ returns trigger
 language plpgsql
 security definer
 set search_path = public
-as $
+as $$
 begin
   if old.id = auth.uid()
      and old.role = 'admin'
@@ -158,7 +158,7 @@ begin
   end if;
   return new;
 end;
-$;
+$$;
 
 drop trigger if exists prevent_admin_self_demotion_trigger on public.user_profiles;
 create trigger prevent_admin_self_demotion_trigger
@@ -226,12 +226,12 @@ create or replace function public.set_updated_at()
 returns trigger
 language plpgsql
 set search_path = public
-as $
+as $$
 begin
   new.updated_at = now();
   return new;
 end;
-$;
+$$;
 
 drop trigger if exists patients_updated_at_trigger on public.patients;
 create trigger patients_updated_at_trigger
@@ -248,7 +248,7 @@ returns trigger
 language plpgsql
 security definer
 set search_path = public
-as $
+as $$
 begin
   if new.doctor_id is not null and not exists (
     select 1
@@ -260,7 +260,7 @@ begin
   end if;
   return new;
 end;
-$;
+$$;
 
 drop trigger if exists referral_doctor_role_trigger on public.referrals;
 create trigger referral_doctor_role_trigger
@@ -285,7 +285,7 @@ returns trigger
 language plpgsql
 security definer
 set search_path = public
-as $
+as $$
 begin
   if new.source = 'ocr_verified' then
     if new.source_report_id is null then
@@ -304,7 +304,7 @@ begin
   end if;
   return new;
 end;
-$;
+$$;
 
 drop trigger if exists health_data_provenance_trigger on public.health_data;
 create trigger health_data_provenance_trigger
@@ -316,7 +316,7 @@ returns trigger
 language plpgsql
 security definer
 set search_path = public
-as $
+as $$
 begin
   if new.health_data_id is not null and not exists (
     select 1
@@ -328,7 +328,7 @@ begin
   end if;
   return new;
 end;
-$;
+$$;
 
 drop trigger if exists screening_health_data_link_trigger on public.screening_records;
 create trigger screening_health_data_link_trigger
@@ -340,7 +340,7 @@ returns trigger
 language plpgsql
 security definer
 set search_path = public
-as $
+as $$
 begin
   if new.screening_record_id is not null and not exists (
     select 1
@@ -352,7 +352,7 @@ begin
   end if;
   return new;
 end;
-$;
+$$;
 
 drop trigger if exists referral_screening_link_trigger on public.referrals;
 create trigger referral_screening_link_trigger
