@@ -263,7 +263,7 @@ function Screening({ setActive }) {
           }}>{ocrLoading ? "Processing..." : "Process report with OCR"}</button>
           {ocrError&&<div className="error-box">{ocrError}</div>}
           {ocrResult&&<div className="ocr-result"><strong>{ocrResult.status === "not_configured" ? "OCR service not connected" : "OCR extraction complete"}</strong><p>{ocrResult.reason || "Review the extracted values before continuing."}</p>{ocrResult.extracted_data&&<pre>{JSON.stringify(ocrResult.extracted_data,null,2)}</pre>}</div>}
-          <button className="secondary-btn" disabled={!ocrResult?.extracted_data} onClick={()=>setVerified(true)}>Mark extracted values as verified</button>
+          <button className="secondary-btn" disabled={!ocrResult?.extracted_data} onClick={async()=>{try{await pranaApi.verifyReport(ocrResult.report_id, ocrResult.extracted_data);setVerified(true);}catch(e){setOcrError(e.message);}}}>Verify extracted values</button>
           {verified&&<span className="verified">Verified for screening</span>}
         </div>}
       </Panel>
