@@ -1,0 +1,9 @@
+{
+  "name": "PRANA – Rural Health Risk Assessment Platform",
+  "short_name": "PRANA",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f5f7fa",
+  "theme_color": "#173d5c",
+  "description": "Rural health screening, risk assessment and referral support platform."
+}
