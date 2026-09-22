@@ -1,9 +1,9 @@
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Literal, Optional
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from api.auth import RequestUser, get_request_user
 from services.supabase_service import SupabaseService
@@ -14,8 +14,8 @@ _REFERRALS: list[dict] = []
 
 
 class ReferralCreate(BaseModel):
-    patient_id: str
-    reason: str
+    patient_id: str = Field(min_length=1)
+    reason: str = Field(min_length=1, max_length=2000)
     doctor_id: Optional[str] = None
     appointment_requested: bool = False
     screening_record_id: Optional[str] = None
@@ -45,6 +45,7 @@ def create_referral(payload: ReferralCreate, user: RequestUser = Depends(get_req
                 "screening_record_id": payload.screening_record_id,
                 "reason": payload.reason,
                 "doctor_id": payload.doctor_id,
+                "appointment_requested": payload.appointment_requested,
                 "created_by": user.id,
             },
         )
@@ -70,8 +71,8 @@ def list_referrals(user: RequestUser = Depends(get_request_user)):
 
 
 class ReferralUpdate(BaseModel):
-    status: Optional[str] = None
-    consultation_advice: Optional[str] = None
+    status: Optional[Literal["pending", "reviewed", "completed"]] = None
+    consultation_advice: Optional[str] = Field(default=None, max_length=5000)
 
 
 @router.patch("/{referral_id}")
