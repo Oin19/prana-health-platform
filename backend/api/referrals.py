@@ -24,6 +24,9 @@ class ReferralCreate(BaseModel):
 @router.post("", status_code=201)
 def create_referral(payload: ReferralCreate, user: RequestUser = Depends(get_request_user)):
     if user.development_mode:
+        from api.patients import _PATIENTS
+        if payload.patient_id not in _PATIENTS:
+            raise HTTPException(status_code=404, detail="Patient not found.")
         referral = {
             "referral_id": f"REF-{uuid4().hex[:8].upper()}",
             **payload.model_dump(),
