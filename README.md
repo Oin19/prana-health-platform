@@ -50,9 +50,9 @@ prana-health-platform/
 
 ## Current implementation status
 
-The repository contains the application shell, role-based navigation, patient registration/search flow, screening data-entry flow, medical-report upload UI, referral/teleconsultation areas, patient-history area, admin users/roles area, and backend API boundaries.
+The repository contains the application shell, role-based navigation, Supabase-aware authentication/API integration, patient registration/search flow, screening data-entry flow, medical-report OCR integration boundary, referral creation/listing, patient screening history retrieval, and role-specific PHC doctor/admin areas.
 
-Clinical OCR extraction, validated disease-risk models, Supabase persistence/authentication, teleconsultation infrastructure and production offline synchronization are intentionally integration points. The application does **not** invent clinical risk scores when those services are not connected.
+Supabase persistence and authenticated API access are implemented when the required environment variables are configured. Clinical OCR extraction and validated disease-risk models remain integration points: the current OCR endpoint reports that it is not configured, and the screening API explicitly skips or marks assessments unavailable rather than inventing clinical risk scores. Production offline synchronization and teleconsultation infrastructure remain integration points.
 
 ## Run locally
 
