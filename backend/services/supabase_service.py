@@ -24,8 +24,9 @@ class SupabaseService:
         }
 
     def request(self, method: str, path: str, **kwargs: Any) -> Any:
+        headers = {**self._headers(), **kwargs.pop("headers", {})}
         with httpx.Client(timeout=20) as client:
-            response = client.request(method, f"{self.url}{path}", headers=self._headers(), **kwargs)
+            response = client.request(method, f"{self.url}{path}", headers=headers, **kwargs)
         if response.status_code >= 400:
             detail = response.text[:500]
             raise RuntimeError(f"Supabase request failed ({response.status_code}): {detail}")
