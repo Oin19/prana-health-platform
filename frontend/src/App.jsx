@@ -158,7 +158,7 @@ function Patients({ setActive }) {
 
 function PatientRows({ patients, setActive }) {
   return <div className="table-wrap"><table><thead><tr><th>Patient ID</th><th>Name</th><th>Age</th><th>Gender</th><th>Contact</th><th></th></tr></thead><tbody>{patients.map(p =>
-    <tr key={p.id}><td>{p.id}</td><td><strong>{p.name}</strong></td><td>{p.age || "—"}</td><td>{p.gender || "—"}</td><td>{p.contact || "—"}</td><td><button className="link-btn" onClick={() => setActive("history")}>View history</button></td></tr>
+    <tr key={p.patient_id || p.id}><td>{p.patient_id || p.id}</td><td><strong>{p.name}</strong></td><td>{p.age || "—"}</td><td>{p.gender || "—"}</td><td>{p.contact || "—"}</td><td><button className="link-btn" onClick={() => setActive("history")}>View history</button></td></tr>
   )}</tbody></table></div>;
 }
 
