@@ -6,6 +6,7 @@ from pydantic import BaseModel
 
 from api.auth import RequestUser, get_request_user
 from services.supabase_service import SupabaseService
+from services.risk_service import RiskAssessmentService
 
 router = APIRouter(prefix="/screenings", tags=["screening"])
 
@@ -23,21 +24,8 @@ class HealthData(BaseModel):
 
 
 def _assessment_results(payload: HealthData) -> dict:
-    available = {
-        "diabetes": payload.blood_glucose is not None,
-        "cardiovascular": any(x is not None for x in (payload.systolic_bp, payload.diastolic_bp, payload.bmi)),
-        "hypertension": payload.systolic_bp is not None and payload.diastolic_bp is not None,
-        "anaemia": payload.haemoglobin is not None,
-    }
-    return {
-        disease: (
-            {"status": "not_configured", "risk": None, "explanation": None,
-             "reason": "Validated disease-assessment service is not connected"}
-            if ready else
-            {"status": "skipped", "reason": "Required data is missing"}
-        )
-        for disease, ready in available.items()
-    }
+    service = RiskAssessmentService()
+    return service.assess(payload.model_dump())
 
 
 def _patient_row(service: SupabaseService, patient_code: str) -> dict:
@@ -101,7 +89,7 @@ def assess_screening(payload: HealthData, user: RequestUser = Depends(get_reques
             f"select=id&patient_id=eq.{patient['id']}&order=recorded_at.desc&limit=1",
         )
         health_data_id = health_rows[0]["id"] if health_rows else None
-        referral_required = False
+        referral_required = any(result.get("referral_required") is True for result in results.values())
         row = service.insert(
             "screening_records",
             {
