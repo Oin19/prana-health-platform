@@ -14,7 +14,13 @@ class RequestUser:
 
 
 def get_request_user(authorization: str | None = Header(default=None)) -> RequestUser:
-    configured = bool(os.getenv("SUPABASE_URL") and os.getenv("SUPABASE_ANON_KEY"))
+    configured = bool(
+        os.getenv("SUPABASE_URL")
+        and (
+            os.getenv("SUPABASE_PUBLISHABLE_KEY")
+            or os.getenv("SUPABASE_ANON_KEY")
+        )
+    )
 
     if not configured:
         return RequestUser(id=None, access_token=None, development_mode=True)
