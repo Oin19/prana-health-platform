@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { supabase, supabaseConfigured } from "./lib/supabase";
 
 const ROLES = ["ASHA / ANM Worker", "PHC Staff", "PHC Doctor", "Admin"];
 
@@ -226,29 +227,77 @@ function SelectField({label,value,options,onChange}) { return <label className="
 function Empty({title,text}) { return <div className="empty"><div className="empty-mark">—</div><h3>{title}</h3><p>{text}</p></div>; }
 
 function Login({onLogin}) {
-  const [role,setRole] = useState(ROLES[0]);
+  const [email,setEmail] = useState("");
+  const [password,setPassword] = useState("");
+  const [devRole,setDevRole] = useState(ROLES[0]);
+  const [error,setError] = useState("");
+  const [loading,setLoading] = useState(false);
+
+  const submit = async (event) => {
+    event.preventDefault();
+    setError(""); setLoading(true);
+    try {
+      if (!supabaseConfigured) {
+        onLogin({ role: devRole, user: null, developmentMode: true });
+        return;
+      }
+      const { data, error: authError } = await supabase.auth.signInWithPassword({ email, password });
+      if (authError) throw authError;
+      const { data: profile, error: profileError } = await supabase.from("user_profiles").select("full_name,role").eq("id", data.user.id).single();
+      if (profileError) throw profileError;
+      const roleMap = { asha_anm:"ASHA / ANM Worker", phc_staff:"PHC Staff", phc_doctor:"PHC Doctor", admin:"Admin" };
+      onLogin({ role: roleMap[profile.role] || profile.role, user: data.user, developmentMode: false });
+    } catch (e) {
+      setError(e.message || "Unable to sign in.");
+    } finally { setLoading(false); }
+  };
+
   return <div className="login-page">
-    <div className="login-card">
+    <form className="login-card" onSubmit={submit}>
       <div className="brand login-brand"><div className="brand-mark">P</div><div><strong>PRANA</strong><span>Rural Health Risk Assessment Platform</span></div></div>
-      <div className="eyebrow">SECURE ACCESS</div><h1>Sign in to PRANA</h1><p className="login-copy">Access is provided according to the role assigned to your account.</p>
-      <label className="field">Role<select value={role} onChange={e=>setRole(e.target.value)}>{ROLES.map(r=><option key={r}>{r}</option>)}</select></label>
-      <label className="field">Email / user ID<input placeholder="Enter your account ID"/></label>
-      <label className="field">Password<input type="password" placeholder="Enter your password"/></label>
-      <button className="primary-btn login-btn" onClick={()=>onLogin(role)}>Sign in</button>
-      <p className="login-foot">Authentication and role enforcement are handled by the configured authentication service.</p>
-    </div>
+      <div className="eyebrow">SECURE ACCESS</div><h1>Sign in to PRANA</h1>
+      <p className="login-copy">Access is provided according to the role assigned to your account.</p>
+      {!supabaseConfigured && <div className="dev-banner"><strong>Local development mode</strong><span>Supabase credentials are not configured, so a local role preview is enabled. Production authentication uses Supabase.</span></div>}
+      {supabaseConfigured ? <>
+        <label className="field">Email / user ID<input value={email} onChange={e=>setEmail(e.target.value)} autoComplete="username" placeholder="Enter your account email"/></label>
+        <label className="field">Password<input type="password" value={password} onChange={e=>setPassword(e.target.value)} autoComplete="current-password" placeholder="Enter your password"/></label>
+      </> : <label className="field">Preview role<select value={devRole} onChange={e=>setDevRole(e.target.value)}>{ROLES.map(r=><option key={r}>{r}</option>)}</select></label>}
+      {error && <div className="error-box">{error}</div>}
+      <button className="primary-btn login-btn" disabled={loading}>{loading ? "Signing in..." : "Sign in"}</button>
+      <p className="login-foot">Patient information is protected by authenticated, role-based access in the production configuration.</p>
+    </form>
   </div>;
 }
 
 export default function App() {
+  const [sessionUser,setSessionUser] = useState(null);
   const [role,setRole] = useState(null);
   const [active,setActive] = useState("dashboard");
-  if (!role) return <Login onLogin={r=>{setRole(r);setActive("dashboard")}}/>;
+  const [developmentMode,setDevelopmentMode] = useState(false);
+
+  useEffect(() => {
+    if (!supabaseConfigured) return;
+    supabase.auth.getSession().then(({ data }) => setSessionUser(data.session?.user || null));
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => setSessionUser(session?.user || null));
+    return () => listener.subscription.unsubscribe();
+  }, []);
+
+  if (!role) return <Login onLogin={({role,user,developmentMode}) => {setRole(role);setSessionUser(user);setDevelopmentMode(developmentMode);setActive("dashboard")}}/>;
+
+  const signOut = async () => {
+    if (supabaseConfigured && !developmentMode) await supabase.auth.signOut();
+    setRole(null); setSessionUser(null);
+  };
+
   const content = active === "dashboard" ? <Dashboard role={role} setActive={setActive}/>
     : active === "patients" ? <Patients setActive={setActive}/>
     : active === "screening" ? <Screening setActive={setActive}/>
     : active === "referrals" ? <Referrals role={role}/>
     : active === "history" ? <History/>
     : <Users/>;
-  return <Layout role={role} active={active} setActive={setActive} onLogout={()=>setRole(null)}>{content}</Layout>;
+
+  return <Layout role={role} active={active} setActive={setActive} onLogout={signOut}>
+    {developmentMode && <div className="dev-strip">Local development preview — configure Supabase before handling real patient information.</div>}
+    {content}
+  </Layout>;
 }
