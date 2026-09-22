@@ -67,3 +67,62 @@ def list_referrals(user: RequestUser = Depends(get_request_user)):
         return {"referrals": rows}
     except RuntimeError as exc:
         raise HTTPException(status_code=502, detail="Referrals could not be retrieved.") from exc
+
+
+class ReferralUpdate(BaseModel):
+    status: Optional[str] = None
+    consultation_advice: Optional[str] = None
+
+
+@router.patch("/{referral_id}")
+def update_referral(
+    referral_id: str,
+    payload: ReferralUpdate,
+    user: RequestUser = Depends(get_request_user),
+):
+    if user.development_mode:
+        for referral in _REFERRALS:
+            if referral["referral_id"] == referral_id:
+                if payload.status is not None:
+                    referral["status"] = payload.status
+                if payload.consultation_advice is not None:
+                    referral["consultation_advice"] = payload.consultation_advice
+                return referral
+        raise HTTPException(status_code=404, detail="Referral not found.")
+
+    if payload.status is None and payload.consultation_advice is None:
+        raise HTTPException(status_code=400, detail="At least one consultation field is required.")
+
+    if payload.status is not None and payload.status not in {"pending", "reviewed", "completed"}:
+        raise HTTPException(status_code=400, detail="Invalid referral status.")
+
+    if not user.id:
+        raise HTTPException(status_code=401, detail="Authentication is required.")
+
+    try:
+        service = SupabaseService(user.access_token)
+        profile = service.select(
+            "user_profiles",
+            f"select=role&id=eq.{user.id}&limit=1",
+        )
+        if not profile or profile[0]["role"] != "phc_doctor":
+            raise HTTPException(status_code=403, detail="Only PHC doctors can update consultation records.")
+
+        update_data = {}
+        if payload.status is not None:
+            update_data["status"] = payload.status
+        if payload.consultation_advice is not None:
+            update_data["consultation_advice"] = payload.consultation_advice
+
+        rows = service.update(
+            "referrals",
+            f"id=eq.{referral_id}",
+            update_data,
+        )
+        if not rows:
+            raise HTTPException(status_code=404, detail="Referral not found.")
+        return rows[0]
+    except HTTPException:
+        raise
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail="Referral could not be updated.") from exc
