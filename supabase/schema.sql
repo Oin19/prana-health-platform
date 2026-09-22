@@ -120,21 +120,21 @@ as $$
   select role from public.user_profiles where id = auth.uid()
 $$;
 
-drop policy if exists "authenticated users can read their role" on public.user_profiles for select;
+drop policy if exists "authenticated users can read their role" on public.user_profiles;
 
 create policy "authenticated users can read their role"
 on public.user_profiles for select
 to authenticated
 using (id = auth.uid());
 
-drop policy if exists "admins can read all user profiles" on public.user_profiles for select;
+drop policy if exists "admins can read all user profiles" on public.user_profiles;
 
 create policy "admins can read all user profiles"
 on public.user_profiles for select
 to authenticated
 using (public.current_app_role() = 'admin');
 
-drop policy if exists "admins can update user profiles" on public.user_profiles for update;
+drop policy if exists "admins can update user profiles" on public.user_profiles;
 
 create policy "admins can update user profiles"
 on public.user_profiles for update
@@ -166,7 +166,7 @@ before update on public.user_profiles
 for each row execute function public.prevent_admin_self_demotion();
 
 
-drop policy if exists "authorized health users can access patients" on public.patients for all;
+drop policy if exists "authorized health users can access patients" on public.patients;
 
 create policy "authorized health users can access patients"
 on public.patients for all
@@ -174,7 +174,7 @@ to authenticated
 using (public.current_app_role() in ('asha_anm','phc_staff','phc_doctor','admin'))
 with check (public.current_app_role() in ('asha_anm','phc_staff','phc_doctor','admin'));
 
-drop policy if exists "authorized health users can access health data" on public.health_data for all;
+drop policy if exists "authorized health users can access health data" on public.health_data;
 
 create policy "authorized health users can access health data"
 on public.health_data for all
@@ -182,7 +182,7 @@ to authenticated
 using (public.current_app_role() in ('asha_anm','phc_staff','phc_doctor','admin'))
 with check (public.current_app_role() in ('asha_anm','phc_staff','phc_doctor','admin'));
 
-drop policy if exists "authorized health users can access reports" on public.medical_reports for all;
+drop policy if exists "authorized health users can access reports" on public.medical_reports;
 
 create policy "authorized health users can access reports"
 on public.medical_reports for all
@@ -190,7 +190,7 @@ to authenticated
 using (public.current_app_role() in ('asha_anm','phc_staff','phc_doctor','admin'))
 with check (public.current_app_role() in ('asha_anm','phc_staff','phc_doctor','admin'));
 
-drop policy if exists "authorized health users can access screening records" on public.screening_records for all;
+drop policy if exists "authorized health users can access screening records" on public.screening_records;
 
 create policy "authorized health users can access screening records"
 on public.screening_records for all
@@ -198,21 +198,21 @@ to authenticated
 using (public.current_app_role() in ('asha_anm','phc_staff','phc_doctor','admin'))
 with check (public.current_app_role() in ('asha_anm','phc_staff','phc_doctor','admin'));
 
-drop policy if exists "health users can read referrals" on public.referrals for select;
+drop policy if exists "health users can read referrals" on public.referrals;
 
 create policy "health users can read referrals"
 on public.referrals for select
 to authenticated
 using (public.current_app_role() in ('asha_anm','phc_staff','phc_doctor','admin'));
 
-drop policy if exists "screening users can create referrals" on public.referrals for insert;
+drop policy if exists "screening users can create referrals" on public.referrals;
 
 create policy "screening users can create referrals"
 on public.referrals for insert
 to authenticated
 with check (public.current_app_role() in ('asha_anm','phc_staff'));
 
-drop policy if exists "doctors can update consultation advice" on public.referrals for update;
+drop policy if exists "doctors can update consultation advice" on public.referrals;
 
 create policy "doctors can update consultation advice"
 on public.referrals for update
@@ -367,7 +367,7 @@ insert into storage.buckets (id, name, public)
 values ('medical-reports', 'medical-reports', false)
 on conflict (id) do nothing;
 
-drop policy if exists "authorized health users can upload medical reports" on storage.objects for insert;
+drop policy if exists "authorized health users can upload medical reports" on storage.objects;
 
 create policy "authorized health users can upload medical reports"
 on storage.objects for insert
@@ -380,7 +380,7 @@ with check (
   )
 );
 
-drop policy if exists "authorized health users can read medical reports" on storage.objects for select;
+drop policy if exists "authorized health users can read medical reports" on storage.objects;
 
 create policy "authorized health users can read medical reports"
 on storage.objects for select
