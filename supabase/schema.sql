@@ -167,6 +167,12 @@ using (public.current_app_role() = 'phc_doctor')
 with check (public.current_app_role() = 'phc_doctor');
 
 create index if not exists patients_patient_code_idx on public.patients(patient_code);
+-- Prevent the same verified medical report from being applied more than once.
+-- This keeps OCR-derived health records traceable to a single source report.
+create unique index if not exists health_data_source_report_unique_idx
+  on public.health_data(source_report_id)
+  where source_report_id is not null;
+
 create index if not exists health_data_patient_id_idx on public.health_data(patient_id);
 create index if not exists screening_records_patient_id_idx on public.screening_records(patient_id);
 create index if not exists referrals_patient_id_idx on public.referrals(patient_id);
