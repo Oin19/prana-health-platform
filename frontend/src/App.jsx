@@ -348,12 +348,16 @@ function ReferralRow({ referral, doctor, onUpdated }) {
 function History() {
   const [patientId, setPatientId] = useState("");
   const [history, setHistory] = useState(null);
+  const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const load = async () => {
     if (!patientId.trim()) { setError("Enter a patient ID."); return; }
     setLoading(true); setError("");
-    try { setHistory(await pranaApi.screeningHistory(patientId.trim())); }
+    try { const id = patientId.trim();
+      const [historyData, reportData] = await Promise.all([pranaApi.screeningHistory(id), pranaApi.medicalReports(id)]);
+      setHistory(historyData);
+      setReports(reportData.reports || []); }
     catch (e) { setError(e.message); setHistory(null); }
     finally { setLoading(false); }
   };
@@ -362,6 +366,7 @@ function History() {
       <div className="search-row"><input value={patientId} onChange={e=>setPatientId(e.target.value)} placeholder="Enter patient ID"/><button className="primary-btn" onClick={load} disabled={loading}>{loading ? "Loading..." : "Load history"}</button></div>
       {error && <div className="error-box">{error}</div>}
       {history && <div className="history-sections">
+        <div><h3>Medical reports</h3>{reports.length ? <div className="table-wrap"><table><thead><tr><th>Uploaded</th><th>Report ID</th><th>OCR status</th><th>Verification</th></tr></thead><tbody>{reports.map(r=><tr key={r.id}><td>{r.created_at ? new Date(r.created_at).toLocaleString() : "—"}</td><td>{r.id}</td><td>{r.ocr_status || "—"}</td><td>{r.verified_data ? "Verified" : "Awaiting verification"}</td></tr>)}</tbody></table></div> : <p className="muted">No stored medical reports.</p>}</div>
         <div><h3>Health data</h3>{history.health_data?.length ? <div className="table-wrap"><table><thead><tr><th>Recorded</th><th>BP</th><th>Glucose</th><th>Haemoglobin</th><th>BMI</th><th>Source</th></tr></thead><tbody>{history.health_data.map(r=><tr key={r.id}><td>{r.recorded_at ? new Date(r.recorded_at).toLocaleString() : "—"}</td><td>{r.systolic_bp ?? "—"} / {r.diastolic_bp ?? "—"}</td><td>{r.blood_glucose ?? "—"}</td><td>{r.haemoglobin ?? "—"}</td><td>{r.bmi ?? "—"}</td><td>{r.source || "—"}</td></tr>)}</tbody></table></div> : <p className="muted">No stored health-data records.</p>}</div>
         <div><h3>Screening records</h3>{history.screenings?.length ? <div className="table-wrap"><table><thead><tr><th>Created</th><th>Diabetes</th><th>Cardiovascular</th><th>Hypertension</th><th>Anaemia</th></tr></thead><tbody>{history.screenings.map(r=><tr key={r.id}><td>{r.created_at ? new Date(r.created_at).toLocaleString() : "—"}</td><td>{r.diabetes?.status || "—"}</td><td>{r.cardiovascular?.status || "—"}</td><td>{r.hypertension?.status || "—"}</td><td>{r.anaemia?.status || "—"}</td></tr>)}</tbody></table></div> : <p className="muted">No stored screening records.</p>}</div>
       </div>}
