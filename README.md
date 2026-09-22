@@ -111,16 +111,41 @@ Backend health endpoint:
 GET /api/health
 ```
 
+## Deployment
+
+The repository now includes deployment configuration for a static Vite frontend and a FastAPI backend:
+
+- `vercel.json` — deploy the repository root as the frontend on Vercel.
+- `render.yaml` — deploy the FastAPI backend on Render.
+- `backend/Dockerfile` — portable container build for the API.
+- `frontend/vercel.json` — SPA fallback when deploying the `frontend/` directory directly.
+
+Set these production values:
+
+**Frontend**
+- `VITE_API_BASE_URL=https://<your-api-host>/api`
+- `VITE_SUPABASE_URL=https://<your-project-ref>.supabase.co`
+- `VITE_SUPABASE_ANON_KEY=<your-supabase-anon-key>`
+
+**Backend**
+- `SUPABASE_URL=https://<your-project-ref>.supabase.co`
+- `SUPABASE_ANON_KEY=<your-supabase-anon-key>`
+- `SUPABASE_MEDICAL_REPORTS_BUCKET=medical-reports`
+- `CORS_ORIGINS=https://<your-frontend-host>`
+- `PRANA_DEMO_OCR=false`
+
+Never put a Supabase service-role key in the frontend or repository.
+
 ## Production completion checklist
 
 Before handling real patient information:
 
 1. Configure Supabase Auth and create a `user_profiles` row for every authorized user.
-2. Apply `supabase/schema.sql`, including its database integrity triggers and private `medical-reports` storage bucket.
+2. Apply `supabase/schema.sql`, including its repeatable RLS policies, database integrity triggers and private `medical-reports` storage bucket.
 3. Configure the deployed frontend API URL and backend CORS origin.
 4. Keep `PRANA_DEMO_OCR=false` and connect a real medical-report OCR service.
 5. Connect validated disease-specific assessment services/models and their approved SHAP/explanation outputs.
-6. Define the final patient-assignment/access policy and tighten RLS from the current role-wide PHC access before clinical deployment.
+6. Define the final patient-assignment/access policy and replace the current role-wide PHC access with assignment-scoped RLS before clinical deployment.
 7. Add a production telemedicine provider only if live video consultation is required.
 8. Complete security, privacy, clinical validation and operational review appropriate to the deployment environment.
 
