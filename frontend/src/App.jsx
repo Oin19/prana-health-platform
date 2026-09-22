@@ -201,6 +201,7 @@ function Screening({ setActive }) {
   const [ocrResult, setOcrResult] = useState(null);
   const [verified, setVerified] = useState(false);
   const [appliedReportId, setAppliedReportId] = useState("");
+  const [appliedHealthDataId, setAppliedHealthDataId] = useState("");
   const [ocrLoading, setOcrLoading] = useState(false);
   const [ocrError, setOcrError] = useState("");
   const [data, setData] = useState({systolic:"",diastolic:"",glucose:"",haemoglobin:"",bmi:"",symptoms:""});
@@ -214,6 +215,7 @@ function Screening({ setActive }) {
     try {
       const payload = {
         patient_id: patient,
+        health_data_id: appliedHealthDataId || null,
         systolic_bp: data.systolic ? Number(data.systolic) : null,
         diastolic_bp: data.diastolic ? Number(data.diastolic) : null,
         blood_glucose: data.glucose ? Number(data.glucose) : null,
@@ -229,6 +231,8 @@ function Screening({ setActive }) {
           setAssessmentError("No connection: health data was saved locally and queued for synchronization. Risk assessment will run when the backend is reachable.");
           return;
         }
+        if (saved?.health_data?.id) setAppliedHealthDataId(saved.health_data.id);
+        payload.health_data_id = saved?.health_data?.id || null;
       }
       const assessed = await pranaApi.assess(payload);
       setResults(assessed.results);
@@ -281,6 +285,7 @@ function Screening({ setActive }) {
               set("bmi", h.bmi ?? "");
               set("symptoms", h.symptoms ?? "");
               setAppliedReportId(ocrResult.report_id);
+              setAppliedHealthDataId(h.id || "");
               setOcrError("");
             }catch(e){setOcrError(e.message);}
           }}>Use verified values for screening</button>}
