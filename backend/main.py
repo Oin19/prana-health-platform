@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+import os\n\nfrom fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.ocr import router as ocr_router
@@ -38,5 +38,5 @@ def api_root():
         "service": "PRANA",
         "version": app.version,
         "modules": ["patients", "screening", "referrals", "ocr", "users"],
-        "note": "Supabase persistence is used when configured; local development uses an explicit in-memory fallback. OCR and validated disease-assessment services remain integration points.",
+        "note": "Supabase persistence is used when configured; local development uses an explicit in-memory fallback. OCR demo mode is available for workflow testing; validated disease-assessment services remain an integration point until a clinically validated model is connected.",
     }
