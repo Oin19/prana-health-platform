@@ -7,10 +7,17 @@ router = APIRouter(prefix="/users", tags=["users"])
 
 ALLOWED_ROLES = {"asha_anm", "phc_staff", "phc_doctor", "admin"}
 
+_LOCAL_USERS = [
+    {"id": "dev-user-1", "full_name": "PRANA Demo Worker", "role": "asha_anm", "created_at": "2026-01-01T00:00:00+00:00"},
+    {"id": "dev-user-2", "full_name": "PRANA Demo PHC Staff", "role": "phc_staff", "created_at": "2026-01-02T00:00:00+00:00"},
+    {"id": "dev-user-3", "full_name": "PRANA Demo Doctor", "role": "phc_doctor", "created_at": "2026-01-03T00:00:00+00:00"},
+    {"id": "dev-user-4", "full_name": "PRANA Demo Admin", "role": "admin", "created_at": "2026-01-04T00:00:00+00:00"},
+]
+
 
 def require_admin(user: RequestUser) -> SupabaseService:
     if user.development_mode:
-        raise HTTPException(status_code=503, detail="User management requires Supabase-backed authentication.")
+        return None
     service = SupabaseService(user.access_token)
     profiles = service.select("user_profiles", query_params={"id": f"eq.{user.id}", "select": "role"})
     if not profiles or profiles[0].get("role") != "admin":
@@ -21,6 +28,8 @@ def require_admin(user: RequestUser) -> SupabaseService:
 @router.get("")
 def list_users(user: RequestUser = Depends(get_request_user)):
     service = require_admin(user)
+    if service is None:
+        return {"users": [dict(profile) for profile in _LOCAL_USERS]}
     profiles = service.select(
         "user_profiles",
         query_params={
@@ -40,6 +49,14 @@ def update_user_role(
     if role not in ALLOWED_ROLES:
         raise HTTPException(status_code=400, detail="Invalid PRANA role.")
     service = require_admin(user)
+    if service is None:
+        target = next((profile for profile in _LOCAL_USERS if profile["id"] == user_id), None)
+        if not target:
+            raise HTTPException(status_code=404, detail="User profile not found.")
+        if target["role"] == "admin" and role != "admin":
+            raise HTTPException(status_code=400, detail="The demo admin cannot remove its admin role.")
+        target["role"] = role
+        return {"user": dict(target)}
     if user_id == user.id and role != "admin":
         raise HTTPException(status_code=400, detail="An admin cannot remove their own admin role.")
 
