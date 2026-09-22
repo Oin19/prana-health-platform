@@ -56,6 +56,23 @@ class SupabaseService:
             headers={**self._headers(), "Prefer": "return=representation"},
         )
 
+    def upload_file(self, bucket: str, path: str, content: bytes, content_type: str) -> dict[str, Any]:
+        headers = {
+            **self._headers(),
+            "Content-Type": content_type,
+            "x-upsert": "false",
+        }
+        with httpx.Client(timeout=30) as client:
+            response = client.post(
+                f"{self.url}/storage/v1/object/{bucket}/{path}",
+                headers=headers,
+                content=content,
+            )
+        if response.status_code >= 400:
+            detail = response.text[:500]
+            raise RuntimeError(f"Supabase storage upload failed ({response.status_code}): {detail}")
+        return response.json() if response.content else {}
+
     def current_user(self) -> dict[str, Any]:
         return self.request("GET", "/auth/v1/user")
 
