@@ -29,6 +29,17 @@ class VerifiedReportData(BaseModel):
 
 
 
+def _demo_ocr_values() -> dict:
+    """Deterministic demo values for UI/integration testing only; not clinical OCR."""
+    return {
+        "systolic_bp": 128,
+        "diastolic_bp": 82,
+        "blood_glucose": 108,
+        "haemoglobin": 13.2,
+        "bmi": 23.7,
+        "symptoms": "No symptoms reported in demo document",
+    }
+
 
 @router.get("/reports/{patient_id}")
 def list_reports(
@@ -205,15 +216,17 @@ async def extract_report(
     if len(content) > _MAX_REPORT_BYTES:
         raise HTTPException(status_code=413, detail="Medical report files must be 10 MB or smaller.")
 
-    if user.development_mode:
+    demo_ocr = user.development_mode or os.getenv("PRANA_DEMO_OCR", "").strip().lower() == "true"
+    if demo_ocr and user.development_mode:
         return {
-            "status": "not_configured",
+            "status": "demo_extracted",
             "patient_id": patient_id,
             "filename": file.filename,
-            "report_id": None,
-            "extracted_data": None,
-            "reason": "Supabase storage and the medical-report OCR service are not configured in local development mode.",
+            "report_id": "demo-" + uuid4().hex,
+            "extracted_data": _demo_ocr_values(),
+            "reason": "DEMO OCR: these values are simulated for workflow testing and are not extracted from the uploaded report.",
             "verification_required": True,
+            "demo": True,
         }
 
     try:
@@ -234,6 +247,31 @@ async def extract_report(
 
         storage_path = f"{patient_rows[0]['id']}/{uuid4().hex}-{file.filename}"
         service.upload_file(bucket, storage_path, content, file.content_type)
+
+        if demo_ocr:
+            extracted = _demo_ocr_values()
+            report = service.insert(
+                "medical_reports",
+                {
+                    "patient_id": patient_rows[0]["id"],
+                    "storage_path": storage_path,
+                    "ocr_status": "extracted",
+                    "extracted_data": extracted,
+                    "verified_data": None,
+                    "created_by": user.id,
+                },
+            )
+            return {
+                "status": "demo_extracted",
+                "patient_id": patient_id,
+                "filename": file.filename,
+                "report_id": report["id"],
+                "storage_path": storage_path,
+                "extracted_data": extracted,
+                "reason": "DEMO OCR: these values are simulated for workflow testing and are not extracted from the uploaded report.",
+                "verification_required": True,
+                "demo": True,
+            }
 
         report = service.insert(
             "medical_reports",
