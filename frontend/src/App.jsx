@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase, supabaseConfigured } from "./lib/supabase";
+import { pranaApi } from "./services/pranaApi";
 
 const ROLES = ["ASHA / ANM Worker", "PHC Staff", "PHC Doctor", "Admin"];
 
@@ -129,15 +130,29 @@ function Patients({ setActive }) {
   const [patients, setPatients] = useState([]);
   const [query, setQuery] = useState("");
   const [showForm, setShowForm] = useState(false);
-  const filtered = useMemo(() => patients.filter(p => JSON.stringify(p).toLowerCase().includes(query.toLowerCase())), [patients, query]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    pranaApi.searchPatients().then(data => setPatients(data.patients || [])).catch(e => setError(e.message)).finally(() => setLoading(false));
+  }, []);
+  const search = async value => {
+    setQuery(value);
+    try { const data = await pranaApi.searchPatients(value); setPatients(data.patients || []); setError(""); }
+    catch (e) { setError(e.message); }
+  };
+  const filtered = patients;
   return <>
     <PageHeader eyebrow="PATIENT MANAGEMENT" title="Register / Search Patient" text="Register a new patient or retrieve an existing patient record."
       action={<button className="primary-btn" onClick={() => setShowForm(true)}>Register Patient</button>}/>
     <section className="panel">
-      <div className="search-row"><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search patient name, patient ID or other registered details"/><span>{filtered.length} record{filtered.length === 1 ? "" : "s"}</span></div>
-      {filtered.length ? <PatientRows patients={filtered} setActive={setActive}/> : <Empty title="No patient records in this session" text="Register a patient to create the first record. Existing records will appear here after backend storage is connected."/>}
+      <div className="search-row"><input value={query} onChange={e => search(e.target.value)} placeholder="Search patient name, patient ID or other registered details"/><span>{filtered.length} record{filtered.length === 1 ? "" : "s"}</span></div>
+      {loading ? <Empty title="Loading patient records" text="Retrieving authorized patient records."/> : filtered.length ? <PatientRows patients={filtered} setActive={setActive}/> : <Empty title="No patient records found" text="Register a patient to create the first record or change the search term."/>}
+      {error && <div className="error-box">{error}</div>}
     </section>
-    {showForm && <PatientForm onClose={() => setShowForm(false)} onSave={p => {setPatients(x => [...x, p]); setShowForm(false)}}/>}
+    {showForm && <PatientForm onClose={() => setShowForm(false)} onSave={async p => {
+        try { const saved = await pranaApi.createPatient(p); setPatients(x => [...x, saved]); setShowForm(false); setError(""); }
+        catch (e) { setError(e.message); }
+      }}/>}
   </>;
 }
 
@@ -149,6 +164,7 @@ function PatientRows({ patients, setActive }) {
 
 function PatientForm({ onClose, onSave }) {
   const [form, setForm] = useState({name:"", age:"", gender:"", contact:"", address:""});
+  const [saving,setSaving] = useState(false);
   const set = (k,v) => setForm({...form,[k]:v});
   return <Modal title="Register Patient" onClose={onClose}>
     <div className="form-grid">
@@ -158,7 +174,7 @@ function PatientForm({ onClose, onSave }) {
       <Field label="Contact" value={form.contact} onChange={v => set("contact",v)}/>
       <Field label="Address / village" value={form.address} onChange={v => set("address",v)}/>
     </div>
-    <div className="modal-actions"><button className="secondary-btn" onClick={onClose}>Cancel</button><button className="primary-btn" disabled={!form.name.trim()} onClick={() => onSave({...form,id:"PRANA-"+Date.now().toString().slice(-6)})}>Save patient</button></div>
+    <div className="modal-actions"><button className="secondary-btn" onClick={onClose}>Cancel</button><button className="primary-btn" disabled={!form.name.trim()} onClick={async () => {setSaving(true); await onSave(form); setSaving(false)}}>{saving ? "Saving..." : "Save patient"}</button></div>
   </Modal>;
 }
 
@@ -169,7 +185,27 @@ function Screening({ setActive }) {
   const [data, setData] = useState({systolic:"",diastolic:"",glucose:"",haemoglobin:"",bmi:"",symptoms:""});
   const set = (k,v) => setData({...data,[k]:v});
   const [results, setResults] = useState(null);
-  const runAssessment = () => setResults({diabetes:"Available",cardiovascular:"Available",hypertension:"Available",anaemia:"Available"});
+  const [assessmentError,setAssessmentError] = useState("");
+  const [assessing,setAssessing] = useState(false);
+  const runAssessment = async () => {
+    if (!patient.trim()) { setAssessmentError("A patient must be identified before screening."); return; }
+    setAssessing(true); setAssessmentError("");
+    try {
+      const payload = {
+        patient_id: patient,
+        systolic_bp: data.systolic ? Number(data.systolic) : null,
+        diastolic_bp: data.diastolic ? Number(data.diastolic) : null,
+        blood_glucose: data.glucose ? Number(data.glucose) : null,
+        haemoglobin: data.haemoglobin ? Number(data.haemoglobin) : null,
+        bmi: data.bmi ? Number(data.bmi) : null,
+        symptoms: data.symptoms || null
+      };
+      const saved = await pranaApi.saveHealthData(payload);
+      const assessed = await pranaApi.assess(payload);
+      setResults(assessed.results);
+    } catch (e) { setAssessmentError(e.message); }
+    finally { setAssessing(false); }
+  };
   return <>
     <PageHeader eyebrow="HEALTH SCREENING" title="Screening & Risk Assessment" text="Enter health data or process a medical report, verify the values, then run applicable assessments."/>
     <section className="panel">
@@ -195,8 +231,12 @@ function Screening({ setActive }) {
       </Panel>
     </section>
     <section className="panel">
-      <div className="panel-head"><div><h2>Disease risk assessment</h2><p className="muted">Assessments with missing required values must be skipped and the reason displayed.</p></div><button className="primary-btn" onClick={runAssessment}>Run applicable assessments</button></div>
-      {results ? <div className="assessment-grid">{diseaseFields.map(([name,key])=><div className="assessment-result" key={key}><strong>{name}</strong><RiskTag value={results[key]}/><p>Model/rule output and explanation will appear here when the screening service is connected.</p></div>)}</div> : <Empty title="No screening results yet" text="Provide sufficient verified data before starting the assessment."/>}
+      <div className="panel-head"><div><h2>Disease risk assessment</h2><p className="muted">Assessments with missing required values must be skipped and the reason displayed.</p></div><button className="primary-btn" onClick={runAssessment} disabled={assessing}>{assessing ? "Assessing..." : "Run applicable assessments"}</button></div>
+      {assessmentError && <div className="error-box">{assessmentError}</div>}
+      {results ? <div className="assessment-grid">{diseaseFields.map(([name,key]) => {
+        const result = results[key] || {status:"skipped",reason:"Assessment unavailable"};
+        return <div className="assessment-result" key={key}><strong>{name}</strong><RiskTag value={result.status === "ready" ? "Ready" : "Skipped"}/><p>{result.status === "skipped" ? result.reason : "The validated screening service will return the risk result and SHAP-based explanation here."}</p></div>;
+      })}</div> : <Empty title="No screening results yet" text="Provide sufficient verified data before starting the assessment."/>}
     </section>
     <div className="clinical-note">Screening results support early identification and referral. They are not a diagnosis. Clinical decisions remain with qualified healthcare professionals.</div>
     <button className="link-btn back-action" onClick={()=>setActive("patients")}>← Return to patient management</button>
