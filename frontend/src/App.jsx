@@ -341,7 +341,7 @@ function Referrals({ role }) {
     <section className="panel">
       <div className="panel-head"><div><h2>{doctor ? "Consultation requests" : "Referral records"}</h2><p className="muted">Records are retrieved from the secured backend workflow.</p></div><button className="secondary-btn" onClick={load}>Refresh</button></div>
       {error && <div className="error-box">{error}</div>}
-      {loading ? <Empty title="Loading referrals" text="Retrieving authorized referral records."/> : referrals.length ? <div className="table-wrap"><table><thead><tr><th>Patient</th><th>Reason</th><th>Status</th><th>Consultation advice</th><th>Created</th>{doctor && <th>Action</th>}</tr></thead><tbody>{referrals.map(r=><ReferralRow key={r.id || r.referral_id} referral={r} doctor={doctor} onUpdated={load}/>)}</tbody></table></div> : <Empty title={doctor ? "No consultation requests" : "No referral records"} text="Referral records will appear here after they are created."/>}
+      {loading ? <Empty title="Loading referrals" text="Retrieving authorized referral records."/> : referrals.length ? <div className="table-wrap"><table><thead><tr><th>Patient</th><th>Reason</th><th>Appointment</th><th>Status</th><th>Consultation advice</th><th>Created</th>{doctor && <th>Action</th>}</tr></thead><tbody>{referrals.map(r=><ReferralRow key={r.id || r.referral_id} referral={r} doctor={doctor} onUpdated={load}/>)}</tbody></table></div> : <Empty title={doctor ? "No consultation requests" : "No referral records"} text="Referral records will appear here after they are created."/>}
     </section>
   </>;
 }
@@ -362,6 +362,7 @@ function ReferralRow({ referral, doctor, onUpdated }) {
   return <tr>
     <td>{referral.patient_id || "—"}</td>
     <td>{referral.reason || "—"}</td>
+    <td>{referral.appointment_requested ? "Requested" : "Not requested"}</td>
     <td>{doctor ? <select value={status} onChange={e=>setStatus(e.target.value)}><option value="pending">pending</option><option value="reviewed">reviewed</option><option value="completed">completed</option></select> : (referral.status || "pending")}</td>
     <td>{doctor ? <input value={advice} onChange={e=>setAdvice(e.target.value)} placeholder="Consultation advice"/> : (referral.consultation_advice || "—")}</td>
     <td>{referral.created_at ? new Date(referral.created_at).toLocaleString() : "—"}</td>
