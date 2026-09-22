@@ -34,10 +34,7 @@ def list_users(user: RequestUser = Depends(get_request_user)):
         return {"users": [dict(profile) for profile in _LOCAL_USERS]}
     profiles = service.select(
         "user_profiles",
-        query_params={
-            "select": "id,full_name,role,created_at",
-            "order": "created_at.desc",
-        },
+        "select=id,full_name,role,created_at&order=created_at.desc",
     )
     return {"users": profiles}
 
