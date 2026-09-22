@@ -7,7 +7,7 @@ from api.referrals import router as referrals_router
 
 app = FastAPI(
     title="PRANA – Rural Health Risk Assessment Platform API",
-    version="0.2.0",
+    version="0.3.0",
 )
 
 app.add_middleware(
@@ -34,5 +34,5 @@ def api_root():
         "service": "PRANA",
         "version": app.version,
         "modules": ["patients", "screening", "referrals"],
-        "note": "Persistence/authentication/OCR/model services are integration points for the deployed environment.",
+        "note": "Supabase persistence is used when configured; local development uses an explicit in-memory fallback. OCR and validated disease-assessment services remain integration points.",
     }
