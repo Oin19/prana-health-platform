@@ -13,6 +13,7 @@ router = APIRouter(prefix="/screenings", tags=["screening"])
 
 class HealthData(BaseModel):
     patient_id: str
+    health_data_id: Optional[str] = None
     systolic_bp: Optional[float] = None
     diastolic_bp: Optional[float] = None
     blood_glucose: Optional[float] = None
@@ -84,11 +85,20 @@ def assess_screening(payload: HealthData, user: RequestUser = Depends(get_reques
     try:
         service = SupabaseService(user.access_token)
         patient = _patient_row(service, payload.patient_id)
-        health_rows = service.select(
-            "health_data",
-            f"select=id&patient_id=eq.{patient['id']}&order=recorded_at.desc&limit=1",
-        )
-        health_data_id = health_rows[0]["id"] if health_rows else None
+        health_data_id = payload.health_data_id
+        if health_data_id:
+            health_rows = service.select(
+                "health_data",
+                f"select=id&patient_id=eq.{patient['id']}&id=eq.{health_data_id}&limit=1",
+            )
+            if not health_rows:
+                raise HTTPException(status_code=404, detail="Referenced health-data record was not found for this patient.")
+        else:
+            health_rows = service.select(
+                "health_data",
+                f"select=id&patient_id=eq.{patient['id']}&order=recorded_at.desc&limit=1",
+            )
+            health_data_id = health_rows[0]["id"] if health_rows else None
         referral_required = any(result.get("referral_required") is True for result in results.values())
         row = service.insert(
             "screening_records",
