@@ -6,5 +6,5 @@ class OCRService:
 
     def extract(self, image_bytes: bytes) -> dict[str, Any]:
         raise NotImplementedError(
-            "Connect this interface to the deployed OCR service before enabling extraction."
+            "Connect this interface to the deployed medical-report OCR service before enabling extraction."
         )
