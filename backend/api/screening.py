@@ -124,3 +124,30 @@ def assess_screening(payload: HealthData, user: RequestUser = Depends(get_reques
         }
     except RuntimeError as exc:
         raise HTTPException(status_code=502, detail="Screening record could not be saved.") from exc
+
+
+@router.get("/history/{patient_id}")
+def screening_history(patient_id: str, user: RequestUser = Depends(get_request_user)):
+    if user.development_mode:
+        return {"patient_id": patient_id, "health_data": [], "screenings": []}
+
+    try:
+        service = SupabaseService(user.access_token)
+        patient = _patient_row(service, patient_id)
+        health_data = service.select(
+            "health_data",
+            f"select=*&patient_id=eq.{patient['id']}&order=recorded_at.desc&limit=100",
+        )
+        screenings = service.select(
+            "screening_records",
+            f"select=*&patient_id=eq.{patient['id']}&order=created_at.desc&limit=100",
+        )
+        return {
+            "patient_id": patient_id,
+            "health_data": health_data,
+            "screenings": screenings,
+        }
+    except HTTPException:
+        raise
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail="Patient history could not be retrieved.") from exc
