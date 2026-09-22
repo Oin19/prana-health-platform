@@ -91,6 +91,69 @@ async def verify_report(
         raise HTTPException(status_code=502, detail="Medical-report verification could not be saved.") from exc
 
 
+@router.post("/reports/{report_id}/apply-to-health-data")
+def apply_verified_report_to_health_data(
+    report_id: str,
+    user: RequestUser = Depends(get_request_user),
+):
+    if user.development_mode:
+        raise HTTPException(
+            status_code=503,
+            detail="Applying verified report data requires Supabase-backed authentication.",
+        )
+
+    try:
+        service = SupabaseService(user.access_token)
+        reports = service.select(
+            "medical_reports",
+            f"select=id,patient_id,verified_data& id=eq.{report_id}&limit=1".replace(" ", ""),
+        )
+        if not reports:
+            raise HTTPException(status_code=404, detail="Medical report not found.")
+
+        verified = reports[0].get("verified_data") or {}
+        if not isinstance(verified, dict) or not verified:
+            raise HTTPException(
+                status_code=409,
+                detail="Verify the extracted report values before applying them to health data.",
+            )
+
+        allowed_fields = (
+            "systolic_bp",
+            "diastolic_bp",
+            "blood_glucose",
+            "haemoglobin",
+            "bmi",
+            "symptoms",
+        )
+        health_values = {field: verified[field] for field in allowed_fields if field in verified}
+        if not health_values:
+            raise HTTPException(
+                status_code=422,
+                detail="The verified report contains no supported PRANA health-data fields.",
+            )
+
+        row = service.insert(
+            "health_data",
+            {
+                "patient_id": reports[0]["patient_id"],
+                **health_values,
+                "source": "ocr_verified",
+                "source_report_id": report_id,
+                "recorded_by": user.id,
+            },
+        )
+        return {
+            "status": "applied",
+            "report_id": report_id,
+            "health_data": row,
+        }
+    except HTTPException:
+        raise
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail="Verified report data could not be applied.") from exc
+
+
 @router.post("/extract")
 async def extract_report(
     patient_id: str = Form(...),
