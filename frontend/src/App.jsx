@@ -223,10 +223,12 @@ function Screening({ setActive }) {
         source: appliedReportId ? "ocr_verified" : "manual",
         source_report_id: appliedReportId || null
       };
-      const saved = await pranaApi.saveHealthData(payload);
-      if (saved?.queued) {
-        setAssessmentError("No connection: health data was saved locally and queued for synchronization. Risk assessment will run when the backend is reachable.");
-        return;
+      if (!appliedReportId) {
+        const saved = await pranaApi.saveHealthData(payload);
+        if (saved?.queued) {
+          setAssessmentError("No connection: health data was saved locally and queued for synchronization. Risk assessment will run when the backend is reachable.");
+          return;
+        }
       }
       const assessed = await pranaApi.assess(payload);
       setResults(assessed.results);
