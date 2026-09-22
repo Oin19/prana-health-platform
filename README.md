@@ -41,10 +41,13 @@ prana-health-platform/
 │   ├── api/
 │   │   ├── patients.py
 │   │   ├── screening.py
-│   │   └── referrals.py
+│   │   ├── ocr.py
+│   │   ├── referrals.py
+│   │   └── users.py
 │   └── services/
 │       ├── ocr_service.py
-│       └── risk_service.py
+│       ├── risk_service.py
+│       └── supabase_service.py
 └── README.md
 ```
 
@@ -52,7 +55,7 @@ prana-health-platform/
 
 The repository contains the application shell, role-based navigation, Supabase-aware authentication/API integration, patient registration/search flow, screening data-entry flow, medical-report OCR integration boundary, referral creation/listing, patient screening history retrieval, and role-specific PHC doctor/admin areas.
 
-Supabase persistence and authenticated API access are implemented when the required environment variables are configured. Clinical OCR extraction and validated disease-risk models remain integration points: the current OCR endpoint reports that it is not configured, and the screening API explicitly skips or marks assessments unavailable rather than inventing clinical risk scores. Production offline synchronization and teleconsultation infrastructure remain integration points.
+Supabase persistence and authenticated API access are implemented when the required environment variables are configured. Medical reports are stored in a private Supabase Storage bucket, verified report values can be applied to health-data records with an explicit `ocr_verified` source, and the admin area is protected by backend role checks plus Supabase RLS policies. Manual health-data entries made offline are queued in IndexedDB and synchronized when connectivity returns. Clinical OCR extraction and validated disease-risk models remain integration points: the current OCR endpoint reports that it is not configured, and the screening API explicitly skips or marks assessments unavailable rather than inventing clinical risk scores. Full offline medical-report capture/synchronization and production teleconsultation infrastructure remain integration points.
 
 ## Run locally
 
