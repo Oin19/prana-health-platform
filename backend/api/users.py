@@ -1,3 +1,5 @@
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException
 
 from api.auth import RequestUser, get_request_user
@@ -15,11 +17,11 @@ _LOCAL_USERS = [
 ]
 
 
-def require_admin(user: RequestUser) -> SupabaseService:
+def require_admin(user: RequestUser) -> Optional[SupabaseService]:
     if user.development_mode:
         return None
     service = SupabaseService(user.access_token)
-    profiles = service.select("user_profiles", query_params={"id": f"eq.{user.id}", "select": "role"})
+    profiles = service.select("user_profiles", f"select=role&id=eq.{user.id}&limit=1")
     if not profiles or profiles[0].get("role") != "admin":
         raise HTTPException(status_code=403, detail="Admin role required.")
     return service
