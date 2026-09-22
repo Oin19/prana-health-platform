@@ -127,6 +127,30 @@ to authenticated
 using (public.current_app_role() = 'admin')
 with check (public.current_app_role() = 'admin');
 
+-- Prevent an authenticated admin from removing their own admin role through a
+-- direct Supabase write. The API enforces the same rule at application level.
+create or replace function public.prevent_admin_self_demotion()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $
+begin
+  if old.id = auth.uid()
+     and old.role = 'admin'
+     and new.role <> 'admin' then
+    raise exception 'An admin cannot remove their own admin role';
+  end if;
+  return new;
+end;
+$;
+
+drop trigger if exists prevent_admin_self_demotion_trigger on public.user_profiles;
+create trigger prevent_admin_self_demotion_trigger
+before update on public.user_profiles
+for each row execute function public.prevent_admin_self_demotion();
+
+
 create policy "authorized health users can access patients"
 on public.patients for all
 to authenticated
