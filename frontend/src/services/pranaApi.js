@@ -1,4 +1,5 @@
 import { supabase, supabaseConfigured } from "../lib/supabase";
+import { enqueueHealthData } from "./offlineQueue";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api";
 
@@ -26,8 +27,17 @@ export const pranaApi = {
     request("/patients" + (query ? "?query=" + encodeURIComponent(query) : "")),
   createPatient: (patient) =>
     request("/patients", { method: "POST", body: JSON.stringify(patient) }),
-  saveHealthData: (data) =>
-    request("/screenings/health-data", { method: "POST", body: JSON.stringify(data) }),
+  saveHealthData: async (data) => {
+    try {
+      return await request("/screenings/health-data", { method: "POST", body: JSON.stringify(data) });
+    } catch (error) {
+      if (!navigator.onLine) {
+        await enqueueHealthData(data);
+        return { status: "queued_offline", queued: true, message: "Health data saved locally and queued for synchronization." };
+      }
+      throw error;
+    }
+  },
   assess: (data) =>
     request("/screenings/assess", { method: "POST", body: JSON.stringify(data) }),
   createReferral: (data) =>
