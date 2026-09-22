@@ -159,3 +159,26 @@ create index if not exists patients_patient_code_idx on public.patients(patient_
 create index if not exists health_data_patient_id_idx on public.health_data(patient_id);
 create index if not exists screening_records_patient_id_idx on public.screening_records(patient_id);
 create index if not exists referrals_patient_id_idx on public.referrals(patient_id);
+
+
+-- Storage bucket for uploaded medical reports.
+-- Create the bucket in Supabase Storage with private access before production use.
+insert into storage.buckets (id, name, public)
+values ('medical-reports', 'medical-reports', false)
+on conflict (id) do nothing;
+
+create policy "authorized health users can upload medical reports"
+on storage.objects for insert
+to authenticated
+with check (
+  bucket_id = 'medical-reports'
+  and public.current_app_role() in ('asha_anm','phc_staff','phc_doctor','admin')
+);
+
+create policy "authorized health users can read medical reports"
+on storage.objects for select
+to authenticated
+using (
+  bucket_id = 'medical-reports'
+  and public.current_app_role() in ('asha_anm','phc_staff','phc_doctor','admin')
+);
