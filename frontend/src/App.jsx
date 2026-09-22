@@ -203,8 +203,8 @@ function PatientForm({ onClose, onSave }) {
   </Modal>;
 }
 
-function Screening({ setActive }) {
-  const [patient, setPatient] = useState("");
+function Screening({ setActive, selectedPatientId }) {
+  const [patient, setPatient] = useState(selectedPatientId || "");
   const [report, setReport] = useState(null);
   const [ocrResult, setOcrResult] = useState(null);
   const [verified, setVerified] = useState(false);
@@ -331,7 +331,7 @@ function Referrals({ role, selectedPatientId }) {
     if (!form.patient_id.trim() || !form.reason.trim()) { setError("Patient ID and referral reason are required."); return; }
     try {
       await pranaApi.createReferral(form);
-      setForm({patient_id:"", reason:"", appointment_requested:false});
+      setForm({patient_id:selectedPatientId || "", reason:"", appointment_requested:false});
       await load();
     } catch (e) { setError(e.message); }
   };
@@ -378,10 +378,11 @@ function ReferralRow({ referral, doctor, onUpdated }) {
   </tr>;
 }
 
-function History() {
-  const [patientId, setPatientId] = useState("");
+function History({ selectedPatientId }) {
+  const [patientId, setPatientId] = useState(selectedPatientId || "");
   const [history, setHistory] = useState(null);
-  const [reports, setReports] = useState([]);\n  const [referrals, setReferrals] = useState([]);
+  const [reports, setReports] = useState([]);
+  const [referrals, setReferrals] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const load = async () => {
@@ -492,6 +493,7 @@ export default function App() {
   const [sessionUser,setSessionUser] = useState(null);
   const [role,setRole] = useState(null);
   const [active,setActive] = useState("dashboard");
+  const [selectedPatientId,setSelectedPatientId] = useState("");
   const [developmentMode,setDevelopmentMode] = useState(false);
 
   useEffect(() => {
