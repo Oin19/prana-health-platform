@@ -368,7 +368,30 @@ function History() {
 }
 
 function Users() {
-  return <><PageHeader eyebrow="ADMIN" title="Users & Roles" text="Manage authorized users and assigned PRANA roles."/><section className="panel"><Empty title="No user records in this session" text="User and role management will use the authentication and database service." /></section></>;
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState("");
+  const load = async () => {
+    setLoading(true);
+    try { const data = await pranaApi.listUsers(); setUsers(data.users || []); setError(""); }
+    catch (e) { setError(e.message); }
+    finally { setLoading(false); }
+  };
+  useEffect(() => { load(); }, []);
+  const changeRole = async (id, role) => {
+    setSaving(id);
+    try { await pranaApi.updateUserRole(id, role); await load(); }
+    catch (e) { setError(e.message); }
+    finally { setSaving(""); }
+  };
+  return <><PageHeader eyebrow="ADMIN" title="Users & Roles" text="Manage authorized users and assigned PRANA roles."/>
+    <section className="panel">
+      <div className="panel-head"><div><h2>Authorized users</h2><p className="muted">Role changes are saved through the authenticated admin API.</p></div><button className="secondary-btn" onClick={load}>Refresh</button></div>
+      {error && <div className="error-box">{error}</div>}
+      {loading ? <Empty title="Loading users" text="Retrieving authorized user profiles."/> : users.length ? <div className="table-wrap"><table><thead><tr><th>Name</th><th>User ID</th><th>Role</th><th>Created</th></tr></thead><tbody>{users.map(u=><tr key={u.id}><td><strong>{u.full_name || "—"}</strong></td><td>{u.id}</td><td><select disabled={saving === u.id} value={u.role} onChange={e=>changeRole(u.id,e.target.value)}><option value="asha_anm">ASHA / ANM Worker</option><option value="phc_staff">PHC Staff</option><option value="phc_doctor">PHC Doctor</option><option value="admin">Admin</option></select></td><td>{u.created_at ? new Date(u.created_at).toLocaleString() : "—"}</td></tr>)}</tbody></table></div> : <Empty title="No user profiles found" text="Create authenticated users and assign their PRANA roles in Supabase."/>}
+    </section>
+  </>;
 }
 
 function Modal({title,onClose,children}) { return <div className="modal-backdrop"><div className="modal"><button className="close-btn" onClick={onClose}>×</button><h2>{title}</h2>{children}</div></div>; }
