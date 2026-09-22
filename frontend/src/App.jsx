@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase, supabaseConfigured } from "./lib/supabase";
 import { pranaApi } from "./services/pranaApi";
+import { getQueuedHealthDataCount, syncQueuedHealthData } from "./services/offlineQueue";
 
 const ROLES = ["ASHA / ANM Worker", "PHC Staff", "PHC Doctor", "Admin"];
 
@@ -77,6 +78,19 @@ function Dashboard({ role, setActive }) {
 }
 
 function WorkerDashboard({ setActive }) {
+  const [queued, setQueued] = useState(0);
+  const [online, setOnline] = useState(navigator.onLine);
+  useEffect(() => {
+    const refresh = async () => setQueued(await getQueuedHealthDataCount().catch(() => 0));
+    const sync = async () => { await syncQueuedHealthData(pranaApi.saveHealthData).catch(() => 0); await refresh(); };
+    const onOnline = () => { setOnline(true); sync(); };
+    const onOffline = () => setOnline(false);
+    refresh();
+    window.addEventListener("online", onOnline);
+    window.addEventListener("offline", onOffline);
+    if (navigator.onLine) sync();
+    return () => { window.removeEventListener("online", onOnline); window.removeEventListener("offline", onOffline); };
+  }, []);
   return <>
     <PageHeader eyebrow="PRANA" title="Dashboard" text="Patient screening and referral workspace."/>
     <section className="notice">
@@ -89,13 +103,16 @@ function WorkerDashboard({ setActive }) {
       <ActionCard title="Medical Report" text="Upload or capture a report and verify OCR-extracted values." onClick={() => setActive("screening")}/>
       <ActionCard title="Referrals / Teleconsultation" text="Review referral requests and consultation status." onClick={() => setActive("referrals")}/>
     </div>
+    <section className="notice connectivity-notice">
+      <strong>{online ? "Connection available" : "Offline mode"}</strong><span>{queued ? `${queued} health record${queued === 1 ? "" : "s"} queued for synchronization.` : "No health records are waiting for synchronization."}</span>
+    </section>
     <section className="two-column">
       <Panel title="Disease assessments">
         <div className="assessment-list">{diseaseFields.map(([name]) => <div key={name}><span>{name}</span><RiskTag value="Not available"/></div>)}</div>
         <p className="muted">Results appear only when the required patient data is available.</p>
       </Panel>
       <Panel title="Connectivity">
-        <div className="offline-box"><strong>Offline-first records</strong><p>Screening records captured without connectivity are retained for synchronization when the connection returns.</p><span>Synchronization status will appear here.</span></div>
+        <div className="offline-box"><strong>Offline-first health records</strong><p>Manual health-data entries made while offline are stored locally and automatically synchronized when connectivity returns.</p><span>{queued ? `${queued} record${queued === 1 ? "" : "s"} waiting` : "Queue is clear"}</span></div>
       </Panel>
     </section>
   </>;
@@ -204,6 +221,10 @@ function Screening({ setActive }) {
         symptoms: data.symptoms || null
       };
       const saved = await pranaApi.saveHealthData(payload);
+      if (saved?.queued) {
+        setAssessmentError("No connection: health data was saved locally and queued for synchronization. Risk assessment will run when the backend is reachable.");
+        return;
+      }
       const assessed = await pranaApi.assess(payload);
       setResults(assessed.results);
     } catch (e) { setAssessmentError(e.message); }
