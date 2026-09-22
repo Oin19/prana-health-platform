@@ -262,16 +262,65 @@ function Screening({ setActive }) {
 
 function Referrals({ role }) {
   const doctor = role === "PHC Doctor";
+  const [referrals, setReferrals] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [form, setForm] = useState({patient_id:"", reason:"", appointment_requested:false});
+  const load = async () => {
+    setLoading(true);
+    try { const data = await pranaApi.listReferrals(); setReferrals(data.referrals || []); setError(""); }
+    catch (e) { setError(e.message); } finally { setLoading(false); }
+  };
+  useEffect(() => { load(); }, []);
+  const submit = async () => {
+    if (!form.patient_id.trim() || !form.reason.trim()) { setError("Patient ID and referral reason are required."); return; }
+    try {
+      await pranaApi.createReferral(form);
+      setForm({patient_id:"", reason:"", appointment_requested:false});
+      await load();
+    } catch (e) { setError(e.message); }
+  };
   return <>
     <PageHeader eyebrow={doctor ? "PHC DOCTOR" : "REFERRAL / TELECONSULTATION"} title={doctor ? "Consultation Requests" : "Referrals & Teleconsultation"} text={doctor ? "Review consultation requests and provide advice." : "Send and track referrals for patients requiring further evaluation."}/>
+    {!doctor && <section className="panel">
+      <div className="panel-head"><div><h2>Create referral</h2><p className="muted">Create a referral only after the applicable screening workflow indicates further evaluation is needed.</p></div></div>
+      <div className="form-grid">
+        <Field label="Patient ID" required value={form.patient_id} onChange={v=>setForm({...form,patient_id:v})}/>
+        <Field label="Reason" required value={form.reason} onChange={v=>setForm({...form,reason:v})}/>
+        <label className="field"><span>Appointment requested</span><input type="checkbox" checked={form.appointment_requested} onChange={e=>setForm({...form,appointment_requested:e.target.checked})}/></label>
+      </div>
+      <div className="modal-actions"><button className="primary-btn" onClick={submit}>Create referral</button></div>
+    </section>}
     <section className="panel">
-      <Empty title={doctor ? "No consultation requests in this session" : "No referral records in this session"} text="Referral and consultation records will appear here when connected to the backend workflow."/>
+      <div className="panel-head"><div><h2>{doctor ? "Consultation requests" : "Referral records"}</h2><p className="muted">Records are retrieved from the secured backend workflow.</p></div><button className="secondary-btn" onClick={load}>Refresh</button></div>
+      {error && <div className="error-box">{error}</div>}
+      {loading ? <Empty title="Loading referrals" text="Retrieving authorized referral records."/> : referrals.length ? <div className="table-wrap"><table><thead><tr><th>Patient</th><th>Reason</th><th>Status</th><th>Created</th></tr></thead><tbody>{referrals.map(r=><tr key={r.id || r.referral_id}><td>{r.patient_id || "—"}</td><td>{r.reason || "—"}</td><td>{r.status || "pending"}</td><td>{r.created_at ? new Date(r.created_at).toLocaleString() : "—"}</td></tr>)}</tbody></table></div> : <Empty title={doctor ? "No consultation requests" : "No referral records"} text="Referral records will appear here after they are created."/>}
     </section>
   </>;
 }
 
 function History() {
-  return <><PageHeader eyebrow="PATIENT HISTORY" title="Patient History" text="Review stored health, screening and referral records for an authorized patient."/><section className="panel"><Empty title="Select a patient to view history" text="Historical records are retrieved from the secured patient record store." /></section></>;
+  const [patientId, setPatientId] = useState("");
+  const [history, setHistory] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const load = async () => {
+    if (!patientId.trim()) { setError("Enter a patient ID."); return; }
+    setLoading(true); setError("");
+    try { setHistory(await pranaApi.screeningHistory(patientId.trim())); }
+    catch (e) { setError(e.message); setHistory(null); }
+    finally { setLoading(false); }
+  };
+  return <><PageHeader eyebrow="PATIENT HISTORY" title="Patient History" text="Review stored health, screening and referral records for an authorized patient."/>
+    <section className="panel">
+      <div className="search-row"><input value={patientId} onChange={e=>setPatientId(e.target.value)} placeholder="Enter patient ID"/><button className="primary-btn" onClick={load} disabled={loading}>{loading ? "Loading..." : "Load history"}</button></div>
+      {error && <div className="error-box">{error}</div>}
+      {history && <div className="history-sections">
+        <div><h3>Health data</h3>{history.health_data?.length ? <div className="table-wrap"><table><thead><tr><th>Recorded</th><th>BP</th><th>Glucose</th><th>Haemoglobin</th><th>BMI</th><th>Source</th></tr></thead><tbody>{history.health_data.map(r=><tr key={r.id}><td>{r.recorded_at ? new Date(r.recorded_at).toLocaleString() : "—"}</td><td>{r.systolic_bp ?? "—"} / {r.diastolic_bp ?? "—"}</td><td>{r.blood_glucose ?? "—"}</td><td>{r.haemoglobin ?? "—"}</td><td>{r.bmi ?? "—"}</td><td>{r.source || "—"}</td></tr>)}</tbody></table></div> : <p className="muted">No stored health-data records.</p>}</div>
+        <div><h3>Screening records</h3>{history.screenings?.length ? <div className="table-wrap"><table><thead><tr><th>Created</th><th>Diabetes</th><th>Cardiovascular</th><th>Hypertension</th><th>Anaemia</th></tr></thead><tbody>{history.screenings.map(r=><tr key={r.id}><td>{r.created_at ? new Date(r.created_at).toLocaleString() : "—"}</td><td>{r.diabetes?.status || "—"}</td><td>{r.cardiovascular?.status || "—"}</td><td>{r.hypertension?.status || "—"}</td><td>{r.anaemia?.status || "—"}</td></tr>)}</tbody></table></div> : <p className="muted">No stored screening records.</p>}</div>
+      </div>}
+    </section>
+  </>;
 }
 
 function Users() {
