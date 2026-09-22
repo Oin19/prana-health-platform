@@ -6,8 +6,17 @@
 
 create extension if not exists pgcrypto;
 
-create type public.app_role as enum ('asha_anm', 'phc_staff', 'phc_doctor', 'admin');
-create type public.referral_status as enum ('pending', 'reviewed', 'completed');
+do $
+begin
+  create type public.app_role as enum ('asha_anm', 'phc_staff', 'phc_doctor', 'admin');
+exception when duplicate_object then null;
+end $;
+
+do $
+begin
+  create type public.referral_status as enum ('pending', 'reviewed', 'completed');
+exception when duplicate_object then null;
+end $;
 
 create table if not exists public.user_profiles (
   id uuid primary key references auth.users(id) on delete cascade,
@@ -111,15 +120,21 @@ as $$
   select role from public.user_profiles where id = auth.uid()
 $$;
 
+drop policy if exists "authenticated users can read their role" on public.user_profiles for select;
+
 create policy "authenticated users can read their role"
 on public.user_profiles for select
 to authenticated
 using (id = auth.uid());
 
+drop policy if exists "admins can read all user profiles" on public.user_profiles for select;
+
 create policy "admins can read all user profiles"
 on public.user_profiles for select
 to authenticated
 using (public.current_app_role() = 'admin');
+
+drop policy if exists "admins can update user profiles" on public.user_profiles for update;
 
 create policy "admins can update user profiles"
 on public.user_profiles for update
@@ -151,11 +166,15 @@ before update on public.user_profiles
 for each row execute function public.prevent_admin_self_demotion();
 
 
+drop policy if exists "authorized health users can access patients" on public.patients for all;
+
 create policy "authorized health users can access patients"
 on public.patients for all
 to authenticated
 using (public.current_app_role() in ('asha_anm','phc_staff','phc_doctor','admin'))
 with check (public.current_app_role() in ('asha_anm','phc_staff','phc_doctor','admin'));
+
+drop policy if exists "authorized health users can access health data" on public.health_data for all;
 
 create policy "authorized health users can access health data"
 on public.health_data for all
@@ -163,11 +182,15 @@ to authenticated
 using (public.current_app_role() in ('asha_anm','phc_staff','phc_doctor','admin'))
 with check (public.current_app_role() in ('asha_anm','phc_staff','phc_doctor','admin'));
 
+drop policy if exists "authorized health users can access reports" on public.medical_reports for all;
+
 create policy "authorized health users can access reports"
 on public.medical_reports for all
 to authenticated
 using (public.current_app_role() in ('asha_anm','phc_staff','phc_doctor','admin'))
 with check (public.current_app_role() in ('asha_anm','phc_staff','phc_doctor','admin'));
+
+drop policy if exists "authorized health users can access screening records" on public.screening_records for all;
 
 create policy "authorized health users can access screening records"
 on public.screening_records for all
@@ -175,21 +198,74 @@ to authenticated
 using (public.current_app_role() in ('asha_anm','phc_staff','phc_doctor','admin'))
 with check (public.current_app_role() in ('asha_anm','phc_staff','phc_doctor','admin'));
 
+drop policy if exists "health users can read referrals" on public.referrals for select;
+
 create policy "health users can read referrals"
 on public.referrals for select
 to authenticated
 using (public.current_app_role() in ('asha_anm','phc_staff','phc_doctor','admin'));
+
+drop policy if exists "screening users can create referrals" on public.referrals for insert;
 
 create policy "screening users can create referrals"
 on public.referrals for insert
 to authenticated
 with check (public.current_app_role() in ('asha_anm','phc_staff'));
 
+drop policy if exists "doctors can update consultation advice" on public.referrals for update;
+
 create policy "doctors can update consultation advice"
 on public.referrals for update
 to authenticated
 using (public.current_app_role() = 'phc_doctor')
 with check (public.current_app_role() = 'phc_doctor');
+
+
+-- Keep modification timestamps current for records edited by the API.
+create or replace function public.set_updated_at()
+returns trigger
+language plpgsql
+set search_path = public
+as $
+begin
+  new.updated_at = now();
+  return new;
+end;
+$;
+
+drop trigger if exists patients_updated_at_trigger on public.patients;
+create trigger patients_updated_at_trigger
+before update on public.patients
+for each row execute function public.set_updated_at();
+
+drop trigger if exists referrals_updated_at_trigger on public.referrals;
+create trigger referrals_updated_at_trigger
+before update on public.referrals
+for each row execute function public.set_updated_at();
+
+create or replace function public.validate_referral_doctor()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $
+begin
+  if new.doctor_id is not null and not exists (
+    select 1
+    from public.user_profiles
+    where id = new.doctor_id
+      and role = 'phc_doctor'
+  ) then
+    raise exception 'The referral doctor must have the PHC doctor role';
+  end if;
+  return new;
+end;
+$;
+
+drop trigger if exists referral_doctor_role_trigger on public.referrals;
+create trigger referral_doctor_role_trigger
+before insert or update on public.referrals
+for each row execute function public.validate_referral_doctor();
 
 create index if not exists patients_patient_code_idx on public.patients(patient_code);
 -- Prevent the same verified medical report from being applied more than once.
@@ -291,13 +367,20 @@ insert into storage.buckets (id, name, public)
 values ('medical-reports', 'medical-reports', false)
 on conflict (id) do nothing;
 
+drop policy if exists "authorized health users can upload medical reports" on storage.objects for insert;
+
 create policy "authorized health users can upload medical reports"
 on storage.objects for insert
 to authenticated
 with check (
   bucket_id = 'medical-reports'
   and public.current_app_role() in ('asha_anm','phc_staff','phc_doctor','admin')
+  and (storage.foldername(name))[1] in (
+    select id::text from public.patients
+  )
 );
+
+drop policy if exists "authorized health users can read medical reports" on storage.objects for select;
 
 create policy "authorized health users can read medical reports"
 on storage.objects for select
@@ -305,4 +388,7 @@ to authenticated
 using (
   bucket_id = 'medical-reports'
   and public.current_app_role() in ('asha_anm','phc_staff','phc_doctor','admin')
+  and (storage.foldername(name))[1] in (
+    select id::text from public.patients
+  )
 );
