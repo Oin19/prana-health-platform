@@ -12,6 +12,34 @@ _ALLOWED_TYPES = {"application/pdf", "image/jpeg", "image/png", "image/webp"}
 
 
 
+@router.get("/reports/{patient_id}")
+def list_reports(
+    patient_id: str,
+    user: RequestUser = Depends(get_request_user),
+):
+    if user.development_mode:
+        return {"patient_id": patient_id, "reports": []}
+
+    try:
+        service = SupabaseService(user.access_token)
+        patient_rows = service.select(
+            "patients",
+            f"select=id,patient_code&patient_code=eq.{patient_id}&limit=1",
+        )
+        if not patient_rows:
+            raise HTTPException(status_code=404, detail="Patient not found.")
+
+        reports = service.select(
+            "medical_reports",
+            f"select=id,patient_id,storage_path,ocr_status,extracted_data,verified_data,verified_by,created_at&patient_id=eq.{patient_rows[0]['id']}&order=created_at.desc&limit=100",
+        )
+        return {"patient_id": patient_id, "reports": reports}
+    except HTTPException:
+        raise
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail="Medical-report history could not be retrieved.") from exc
+
+
 @router.patch("/reports/{report_id}/verify")
 async def verify_report(
     report_id: str,
