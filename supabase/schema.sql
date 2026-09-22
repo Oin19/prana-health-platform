@@ -83,6 +83,7 @@ create table if not exists public.referrals (
   screening_record_id uuid references public.screening_records(id) on delete set null,
   reason text not null,
   doctor_id uuid references auth.users(id),
+  appointment_requested boolean not null default false,
   status public.referral_status not null default 'pending',
   consultation_advice text,
   created_by uuid references auth.users(id),
