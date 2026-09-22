@@ -10,6 +10,9 @@ from services.risk_service import RiskAssessmentService
 
 router = APIRouter(prefix="/screenings", tags=["screening"])
 
+_HEALTH_DATA: list[dict] = []
+_SCREENINGS: list[dict] = []
+
 
 class HealthData(BaseModel):
     patient_id: str
@@ -47,11 +50,18 @@ def _patient_row(service: SupabaseService, patient_code: str) -> dict:
 @router.post("/health-data")
 def save_health_data(payload: HealthData, user: RequestUser = Depends(get_request_user)):
     if user.development_mode:
+        row = {
+            "id": payload.health_data_id or f"DEV-HD-{len(_HEALTH_DATA) + 1:04d}",
+            "patient_id": payload.patient_id,
+            **payload.model_dump(exclude={"health_data_id"}),
+            "recorded_at": datetime.now(timezone.utc).isoformat(),
+        }
+        _HEALTH_DATA.append(row)
         return {
             "status": "accepted",
             "patient_id": payload.patient_id,
-            "health_data": payload.model_dump(),
-            "recorded_at": datetime.now(timezone.utc).isoformat(),
+            "health_data": row,
+            "recorded_at": row["recorded_at"],
         }
 
     try:
@@ -84,10 +94,28 @@ def assess_screening(payload: HealthData, user: RequestUser = Depends(get_reques
     results = _assessment_results(payload)
 
     if user.development_mode:
+        health_data_id = payload.health_data_id
+        if not health_data_id:
+            matching = [row for row in _HEALTH_DATA if row["patient_id"] == payload.patient_id]
+            health_data_id = matching[-1]["id"] if matching else None
+        row = {
+            "id": f"DEV-SCR-{len(_SCREENINGS) + 1:04d}",
+            "patient_id": payload.patient_id,
+            "health_data_id": health_data_id,
+            "diabetes": results["diabetes"],
+            "cardiovascular": results["cardiovascular"],
+            "hypertension": results["hypertension"],
+            "anaemia": results["anaemia"],
+            "referral_required": any(r.get("referral_required") is True for r in results.values()),
+            "referral_guidance": None,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        _SCREENINGS.append(row)
         return {
             "patient_id": payload.patient_id,
+            "screening_record_id": row["id"],
             "results": results,
-            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "generated_at": row["created_at"],
         }
 
     try:
@@ -135,7 +163,11 @@ def assess_screening(payload: HealthData, user: RequestUser = Depends(get_reques
 @router.get("/history/{patient_id}")
 def screening_history(patient_id: str, user: RequestUser = Depends(get_request_user)):
     if user.development_mode:
-        return {"patient_id": patient_id, "health_data": [], "screenings": []}
+        return {
+            "patient_id": patient_id,
+            "health_data": [row for row in reversed(_HEALTH_DATA) if row["patient_id"] == patient_id],
+            "screenings": [row for row in reversed(_SCREENINGS) if row["patient_id"] == patient_id],
+        }
 
     try:
         service = SupabaseService(user.access_token)
