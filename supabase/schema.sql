@@ -178,6 +178,88 @@ create index if not exists health_data_patient_id_idx on public.health_data(pati
 create index if not exists screening_records_patient_id_idx on public.screening_records(patient_id);
 create index if not exists referrals_patient_id_idx on public.referrals(patient_id);
 
+-- Database-level integrity for cross-table provenance. These checks complement
+-- API validation so direct Supabase writes cannot attach data to another patient.
+create or replace function public.validate_health_data_provenance()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $
+begin
+  if new.source = 'ocr_verified' then
+    if new.source_report_id is null then
+      raise exception 'OCR-verified health data must reference a medical report';
+    end if;
+    if not exists (
+      select 1
+      from public.medical_reports
+      where id = new.source_report_id
+        and patient_id = new.patient_id
+    ) then
+      raise exception 'The OCR source report must belong to the same patient';
+    end if;
+  elsif new.source_report_id is not null then
+    raise exception 'Manual health data cannot reference an OCR report';
+  end if;
+  return new;
+end;
+$;
+
+drop trigger if exists health_data_provenance_trigger on public.health_data;
+create trigger health_data_provenance_trigger
+before insert or update on public.health_data
+for each row execute function public.validate_health_data_provenance();
+
+create or replace function public.validate_screening_health_data_link()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $
+begin
+  if new.health_data_id is not null and not exists (
+    select 1
+    from public.health_data
+    where id = new.health_data_id
+      and patient_id = new.patient_id
+  ) then
+    raise exception 'The screening record health-data reference must belong to the same patient';
+  end if;
+  return new;
+end;
+$;
+
+drop trigger if exists screening_health_data_link_trigger on public.screening_records;
+create trigger screening_health_data_link_trigger
+before insert or update on public.screening_records
+for each row execute function public.validate_screening_health_data_link();
+
+create or replace function public.validate_referral_screening_link()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $
+begin
+  if new.screening_record_id is not null and not exists (
+    select 1
+    from public.screening_records
+    where id = new.screening_record_id
+      and patient_id = new.patient_id
+  ) then
+    raise exception 'The referral screening reference must belong to the same patient';
+  end if;
+  return new;
+end;
+$;
+
+drop trigger if exists referral_screening_link_trigger on public.referrals;
+create trigger referral_screening_link_trigger
+before insert or update on public.referrals
+for each row execute function public.validate_referral_screening_link();
+
+
 
 -- Storage bucket for uploaded medical reports.
 -- Create the bucket in Supabase Storage with private access before production use.
