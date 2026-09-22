@@ -57,6 +57,18 @@ async def verify_report(
 
     try:
         service = SupabaseService(user.access_token)
+        reports = service.select(
+            "medical_reports",
+            f"select=id,extracted_data& id=eq.{report_id}&limit=1".replace(" ", ""),
+        )
+        if not reports:
+            raise HTTPException(status_code=404, detail="Medical report not found.")
+        if not reports[0].get("extracted_data"):
+            raise HTTPException(
+                status_code=409,
+                detail="The report has no OCR-extracted data to verify yet.",
+            )
+
         rows = service.update(
             "medical_reports",
             f"id=eq.{report_id}",
